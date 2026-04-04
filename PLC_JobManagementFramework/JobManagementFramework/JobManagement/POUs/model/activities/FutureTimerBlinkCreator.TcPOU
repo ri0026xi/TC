@@ -1,0 +1,78 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FutureTimerBlinkCreator" Id="{00c322af-7185-4704-ac60-e866f729070a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FutureTimerBlinkCreator IMPLEMENTS I_TaskCreator
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	_output: REFERENCE TO BOOL;
+	_process_time: TIME;
+	_error_test :BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="create_future" Id="{c5f621b6-790c-46bd-9a64-81cacb02a61b}">
+      <Declaration><![CDATA[{warning 'add method implementation '}
+METHOD create_future : I_Future
+VAR_INPUT
+	future_name	: STRING;
+END_VAR
+VAR
+	_p_future : POINTER TO FutureTimerBlink;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_p_future := __NEW(FutureTimerBlink);
+_p_future^.future_name := future_name;
+_p_future^.set_parameter(_process_time, _output);
+_p_future^.set_options(_error_test);
+create_future := _p_future^;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="destroy_future" Id="{5877055a-7212-48f8-b84d-84493e758d01}">
+      <Declaration><![CDATA[{warning 'add method implementation '}
+METHOD destroy_future : I_Future
+VAR_INPUT
+	future	: I_Future;
+END_VAR
+VAR
+	_p_future : POINTER TO FutureTimerBlink;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF __QUERYPOINTER(future, _p_future) THEN
+	__DELETE(_p_future);
+	IF _p_future = 0  THEN
+		destroy_future := 0;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="set_options" Id="{01e1e1e6-08b1-4cf2-8dd3-a3eb97c661d5}">
+      <Declaration><![CDATA[METHOD set_options : BOOL
+VAR_INPUT
+	error_test: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_error_test := error_test;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="set_parameter" Id="{2374fd8a-3136-4eab-bd97-a48d2753ddbb}">
+      <Declaration><![CDATA[METHOD set_parameter : BOOL
+VAR_INPUT
+	process_time: TIME;
+	output		: REFERENCE TO BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_process_time := process_time;
+_output REF= output;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

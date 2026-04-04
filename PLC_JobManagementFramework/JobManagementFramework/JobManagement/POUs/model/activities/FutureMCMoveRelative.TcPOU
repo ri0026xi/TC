@@ -1,0 +1,186 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="FutureMCMoveRelative" Id="{68392a9c-c48d-4da1-9d24-d5280f44f2c9}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FutureMCMoveRelative EXTENDS FB_AbstructFuture
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	_fb_move_rel	: MC_MoveRelative;
+	_mc_stop		: MC_Stop;
+	_mc_reset	: MC_Reset;
+	_abort_executor		: FB_Executor;
+	_axis: REFERENCE TO AXIS_REF;
+	_distance : MC_LREAL;
+	_velocity : MC_LREAL;
+	_acceleration: MC_LREAL;
+	_deceleration: MC_LREAL;
+	_jerk		: MC_LREAL;
+	_option : ST_MoveOptions;
+	_buffer_mode : MC_BufferMode ;
+	_exec_state : UDINT;
+	_abort_state : UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="abort" Id="{8d2f52e3-49e4-4662-be7f-97ff2c46b0a5}">
+      <Declaration><![CDATA[METHOD abort : BOOL // Return TRUE if finish.
+VAR_INST
+	future_stop : FutureMcStop;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE _abort_state OF
+	0:
+		_mc_stop(axis := _axis, Execute := FALSE);
+		_mc_stop(
+			Axis:= _axis,
+			Execute := TRUE,
+			Jerk := _jerk,
+			Options := _option
+		);
+		_abort_state := 1;
+	1:
+		IF _mc_stop.Busy THEN
+			_mc_stop(Axis:= _axis,Execute := FALSE);
+		END_IF
+		IF _mc_stop.Done OR _mc_stop.Error THEN
+			abort := TRUE;		
+		END_IF
+		_error_id := _mc_stop.ErrorID;
+END_CASE
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="error_reset" Id="{446c0a88-4a07-4bfd-bcd5-e25cc2907bc1}">
+      <Declaration><![CDATA[METHOD error_reset : BOOL // Must be overrided if future has any errors.
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _error_id <> 0 THEN
+	CASE _exec_state OF
+		0:
+			_mc_reset(Axis := _axis, Execute := FALSE);
+			_mc_reset(Axis:= _axis, Execute := TRUE );
+			_exec_state := 1;
+		1:
+			IF _mc_reset.Busy THEN
+				_mc_reset(Axis:= _axis,Execute := FALSE);
+			END_IF
+	END_CASE
+	
+	_error_id := _mc_reset.ErrorID;
+	error_reset := _mc_reset.Done;
+ELSE
+	error_reset := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="execute" Id="{20088402-d158-4220-ba48-4075b6c9821d}">
+      <Declaration><![CDATA[METHOD execute : BOOL // Return TRUE if finish.
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+CASE _exec_state OF
+	0:
+		_abort_state := 0;
+		_fb_move_rel(Axis := _axis,Execute := FALSE);
+		_fb_move_rel(
+			Execute := TRUE,
+			Axis := _axis,
+			Distance := _distance,
+			Velocity := _velocity,
+			Acceleration := _acceleration,
+			Deceleration := _deceleration,
+			Jerk := _jerk,
+			BufferMode := _buffer_mode,
+			Options := _option
+		);
+		_exec_state := 1;
+	1:
+		IF _fb_move_rel.Busy THEN
+			_fb_move_rel(Axis := _axis,Execute := FALSE);
+		END_IF
+END_CASE
+
+_error_id := _fb_move_rel.ErrorID;
+execute := _fb_move_rel.Done OR _fb_move_rel.Error;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="init" Id="{4a5527fb-69f1-4f27-99bf-902e0f84d9fa}">
+      <Declaration><![CDATA[METHOD init : BOOL // Return TRUE if finish.
+
+VAR
+	axis: INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_exec_state := 0;
+_abort_state := 0;
+_error_id := _fb_move_rel.ErrorID;
+init := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="set_options" Id="{026c747f-8220-4684-ae1b-5229a3fc953e}">
+      <Declaration><![CDATA[METHOD set_options : BOOL
+VAR_INPUT
+	option : ST_MoveOptions;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_option := option;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="set_parameters" Id="{38aa7173-6e5a-4ac4-8011-d9e2cedddd6f}">
+      <Declaration><![CDATA[METHOD set_parameters : BOOL
+VAR_INPUT
+	axis : REFERENCE TO AXIS_REF;
+	distance : MC_LREAL;
+	velocity : MC_LREAL;
+	acceleration	: MC_LREAL;		// Set deceleration in case let moving axis halt.
+	deceleration	: MC_LREAL;		// Set deceleration in case let moving axis halt.
+	jerk			: MC_LREAL;		// Set jerk in case let moving axis halt.
+	buffer_mode : MC_BufferMode;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_axis REF= axis;
+_distance := distance;
+_velocity := velocity;
+_acceleration := acceleration;
+_deceleration := deceleration;
+_jerk := jerk;
+_buffer_mode := buffer_mode;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FutureMCMoveRelative">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FutureMCMoveRelative.abort">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FutureMCMoveRelative.error_reset">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FutureMCMoveRelative.execute">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FutureMCMoveRelative.init">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FutureMCMoveRelative.set_options">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FutureMCMoveRelative.set_parameters">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

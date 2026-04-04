@@ -1,0 +1,236 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <Itf Name="I_Job" Id="{c241c129-013a-48a7-8f50-a46604fd73e8}">
+    <Declaration><![CDATA[INTERFACE I_Job EXTENDS __SYSTEM.IQueryInterface 
+]]></Declaration>
+    <Method Name="abort" Id="{ba384c68-144d-4364-9ff2-dddd491ec19b}">
+      <Declaration><![CDATA[(*abort method
+
+*)
+METHOD abort : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+
+]]></Declaration>
+    </Method>
+    <Property Name="busy" Id="{0a37f028-1504-4cb9-b1b7-53bde72f8218}">
+      <Declaration><![CDATA[PROPERTY busy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3fc6c967-5220-403e-87b7-749035c24bde}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="children" Id="{22f1430e-f0f4-41f2-b46c-84e39d72eef9}">
+      <Declaration><![CDATA[PROPERTY children : I_Container // Accesser for interface pointer to child container instance.]]></Declaration>
+      <Get Name="Get" Id="{15e6d966-0d98-49a3-b8d2-a7b46a69e496}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="continuous_mode" Id="{5447b52e-b242-4675-8469-7326885828e2}">
+      <Declaration><![CDATA[PROPERTY continuous_mode : bool // Make true if keep executing state after all jobs be finished.]]></Declaration>
+      <Set Name="Set" Id="{a2ab253f-3721-4987-9553-9b003b002196}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="create_container" Id="{ef3659a9-663f-436e-aba6-183a0f497e09}">
+      <Declaration><![CDATA[METHOD create_container : I_Container // Make container object onto child.
+VAR_INPUT
+	container_type : ContainerType; // specify container type
+	name: STRING;	// specify future name
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="create_future" Id="{b2304e27-07e6-4812-a102-238f555d4211}">
+      <Declaration><![CDATA[METHOD create_future : I_Future // Create future dynamically.
+VAR_INPUT
+	creator : I_TaskCreator; // Specify creator object by which Interface Task Creator implemented.
+	future_name: STRING; // Spcfigy future name.
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="current_state" Id="{3bfa10c5-3b1a-417f-a36e-93b29914da62}">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring' := 'call'}
+{attribute 'OPC.UA.DA.Description' := 'Current state of this executor object.'}
+PROPERTY current_state : E_FutureExecutionState // Get current job state]]></Declaration>
+      <Get Name="Get" Id="{96511d7e-81ae-459b-9a47-3a200cb859d4}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="current_timestamp" Id="{b926ced9-2489-4467-805a-e7d95bed8cdf}">
+      <Declaration><![CDATA[PROPERTY current_timestamp : POINTER TO T_FILETIME64]]></Declaration>
+      <Get Name="Get" Id="{a8d3ca2d-d89a-4442-b154-5f9ccad5ba29}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{04885ff6-8be2-40f0-a6f5-2042bf59e436}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="done" Id="{49aa35c1-9eff-40f2-9175-654e8db9ac55}">
+      <Declaration><![CDATA[PROPERTY done : BOOL // Present true if process be finished.]]></Declaration>
+      <Get Name="Get" Id="{45954038-aba4-4ca0-9dca-c851b3710f18}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="error_reset" Id="{fb5cadc3-27be-41ec-9249-633dbdf2cb4f}">
+      <Declaration><![CDATA[METHOD error_reset : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="execute" Id="{409ed4e0-c300-4f5d-ae79-ae3e1916ca1c}">
+      <Declaration><![CDATA[METHOD execute : BOOL // Execute future process and return TRUE if all task are finished.
+]]></Declaration>
+    </Method>
+    <Property Name="future" Id="{7eb38465-3b0f-45b2-8963-3234ef5b537d}">
+      <Declaration><![CDATA[PROPERTY future : I_Future // Set future instance direct.]]></Declaration>
+      <Get Name="Get" Id="{b2111c34-68f3-4c57-8cbb-f8aca8c3cab9}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{2dd1e9c2-d6b2-4b75-aa3e-9b57cc7b06b8}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="future_creator" Id="{4453c69f-5993-4e32-aa6b-70c0a3524612}">
+      <Declaration><![CDATA[PROPERTY future_creator : I_TaskCreator // Set creator instance.]]></Declaration>
+      <Set Name="Set" Id="{4c5d6441-82c1-43cc-a85e-15d729c30d05}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="get_job_info" Id="{dcf93f75-a375-4062-b2dd-3955dc6dab77}">
+      <Declaration><![CDATA[METHOD get_job_info : BOOL
+VAR_INPUT
+	title		: T_MaxString;
+	observable 	: I_Observable;
+	recursive	: BOOL := FALSE;
+END_VAR]]></Declaration>
+    </Method>
+    <Property Name="id" Id="{7e4a5eb7-1da6-498f-b820-0b35913287d7}">
+      <Declaration><![CDATA[PROPERTY id : T_MaxString // Get job id.
+]]></Declaration>
+      <Get Name="Get" Id="{cd5b6e57-c851-4790-b895-552dc87d0850}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="init" Id="{d81bf7e0-a419-45a2-a8da-d29900ce51e8}">
+      <Declaration><![CDATA[METHOD init : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="job_event_observable" Id="{86842a8e-fd31-4199-9e8a-898c1d1cd9cd}">
+      <Declaration><![CDATA[PROPERTY job_event_observable : I_Observable]]></Declaration>
+      <Get Name="Get" Id="{99052aa6-8cde-4c37-b866-4701a11893cf}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{f32ae562-a901-42d1-862f-6e9bedd113ca}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="last_state" Id="{c0d32629-3739-44a6-a76a-562079ce9773}">
+      <Declaration><![CDATA[PROPERTY last_state : E_FutureExecutionState]]></Declaration>
+      <Get Name="Get" Id="{516dfae1-5a01-4cc5-bfd0-d6e15004cff0}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="namespace" Id="{3fd49687-b433-46f1-b4e3-da6564312bf5}">
+      <Declaration><![CDATA[PROPERTY namespace : T_MaxString]]></Declaration>
+      <Get Name="Get" Id="{a073b4a6-1d91-4c1f-b46b-586a3d540fad}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="nErrorID" Id="{587d3aee-efb4-44d2-8930-476a7f1c0617}">
+      <Declaration><![CDATA[PROPERTY nErrorID : HRESULT // Present error code when each process,init(), execute(), quit() are finished. '0' represent normal condition without any errors.
+]]></Declaration>
+      <Get Name="Get" Id="{a3d3ab3d-9d97-4c08-af3c-1d49e2061134}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="next_job" Id="{eb7c50ec-1806-4fa1-bafa-1a5e8d6092d9}">
+      <Declaration><![CDATA[PROPERTY next_job : I_Job]]></Declaration>
+      <Get Name="Get" Id="{b41a4c3f-4b81-422b-b3b3-70efe9abaf1a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{dd2944a7-1cf1-471b-8863-2719a1df0d55}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="parent_executor" Id="{afe0c2b8-f9fa-47b0-90ee-38d73ecdf14f}">
+      <Declaration><![CDATA[PROPERTY parent_executor : I_Job]]></Declaration>
+      <Get Name="Get" Id="{1ff8349f-c5a4-4d15-9d8a-dec4e14daa55}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{3598cf4f-5a6f-40b3-9da7-3117baa0a6ef}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="persistent_job" Id="{4e7348c0-cfaa-4896-a661-211f010820db}">
+      <Declaration><![CDATA[PROPERTY persistent_job : BOOL]]></Declaration>
+      <Get Name="Get" Id="{bb9fa261-ba47-4735-8f86-0557267d8ac3}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{f2ea2f19-1746-4bf2-955a-0d91fb6a9b2a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="previous_job" Id="{53fdeaa8-8cea-49ba-8442-3df8bdc8371e}">
+      <Declaration><![CDATA[PROPERTY previous_job : I_Job]]></Declaration>
+      <Get Name="Get" Id="{043e633c-6b82-431a-b78c-9a27a8d1b242}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{3e176b8b-ae1c-474a-a40c-96558b604419}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="quit" Id="{31796530-93ca-4ab0-8e11-4aa4e570a94a}">
+      <Declaration><![CDATA[METHOD quit : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="ready" Id="{6e637a5d-a326-4126-bf27-305dae1a03d1}">
+      <Declaration><![CDATA[PROPERTY ready : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d20fe530-72fb-41ed-8821-b41c52e366ff}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{834f043c-6964-4495-9c44-b9225b356eb2}">
+      <Declaration><![CDATA[METHOD reset : BOOL // Return TRUE if finish.
+VAR_INPUT
+	deep : BOOL := FALSE;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="resume" Id="{7b0c46e2-dfa2-44c4-83df-ea3de905fb2f}">
+      <Declaration><![CDATA[METHOD resume : BOOL
+]]></Declaration>
+    </Method>
+    <Property Name="serial" Id="{f496f069-4266-4a7f-867a-36fc21539f6d}">
+      <Declaration><![CDATA[PROPERTY serial : ULINT]]></Declaration>
+      <Get Name="Get" Id="{9ebf096a-d2f5-429e-a9a4-7f8ac74d9f9c}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{2f723a42-e24d-4376-ac3b-2cfca34e750a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="start" Id="{85cad871-c4a3-42b3-ac51-d1ea4715df17}">
+      <Declaration><![CDATA[METHOD start : BOOL
+]]></Declaration>
+    </Method>
+    <Property Name="transition" Id="{fd1f1560-bb19-457c-9165-810aa9bb64ea}">
+      <Declaration><![CDATA[PROPERTY transition : BOOL]]></Declaration>
+      <Get Name="Get" Id="{54413eeb-9e38-4f42-a57e-ce13ade2041f}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="upstream_aborting" Id="{a7842f50-8df5-46f1-ab16-88ebb4c8aa74}">
+      <Declaration><![CDATA[PROPERTY upstream_aborting : BOOL]]></Declaration>
+      <Get Name="Get" Id="{13e86aa0-64b7-4dbf-a816-21154bcabe6a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{8c26813a-2b94-4eff-91e3-a173456bd1af}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+  </Itf>
+</TcPlcObject>

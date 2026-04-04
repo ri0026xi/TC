@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FutureCounterBlinkCreator" Id="{0aed4266-d9e2-40be-bcde-9c04d0aa9d0a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FutureCounterBlinkCreator IMPLEMENTS I_TaskCreator
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	_target_count: UINT;
+	_count_trigger: REFERENCE TO BOOL;
+	_output: REFERENCE TO BOOL;
+	_error_test :BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="create_future" Id="{58d1e4fb-374b-4c0d-8dc2-d3a37f94d8ac}">
+      <Declaration><![CDATA[{warning 'add method implementation '}
+METHOD create_future : I_Future
+VAR_INPUT
+	future_name :STRING;
+END_VAR
+VAR
+	_p_future : POINTER TO FutureCounterBlink;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_p_future := __NEW(FutureCounterBlink);
+_p_future^.future_name := future_name;
+_p_future^.set_parameter(_target_count, _count_trigger, _output);
+_p_future^.error_test := _error_test;
+create_future := _p_future^;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="destroy_future" Id="{a7115440-52e4-4ce1-8ece-dcac8485997a}">
+      <Declaration><![CDATA[{warning 'add method implementation '}
+METHOD destroy_future : I_Future
+VAR_INPUT
+	future : I_Future;
+END_VAR
+VAR
+	_p_future : POINTER TO FutureCounterBlink;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF __QUERYPOINTER(future, _p_future) THEN
+	__DELETE(_p_future);
+	IF _p_future = 0  THEN
+		destroy_future := 0;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="set_options" Id="{9f7ce681-1261-4d9c-92ef-8077f0af5f5d}">
+      <Declaration><![CDATA[METHOD set_options : BOOL
+VAR_INPUT
+	error_test: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_error_test := error_test;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="set_parameter" Id="{d9e127df-2710-4a99-b60e-f867a11b9223}">
+      <Declaration><![CDATA[METHOD set_parameter : BOOL
+VAR_INPUT
+	target_count: UINT;
+	count_trigger : REFERENCE TO BOOL;
+	output		: REFERENCE TO BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_count_trigger REF= count_trigger;
+_output REF= output;
+_target_count := target_count;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

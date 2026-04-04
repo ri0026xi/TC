@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <DUT Name="ST_MotionData" Id="{957f2ee4-797d-497d-adf5-2f9c4f103a47}">
+    <Declaration><![CDATA[TYPE ST_MotionData EXTENDS Tc2_MC2.NCTOPLC_AXIS_REF : 
+STRUCT
+	record_time : ULINT; 
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

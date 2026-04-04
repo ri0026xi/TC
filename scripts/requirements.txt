@@ -1,0 +1,3 @@
+# TcUnit-Runner handles COM automation directly.
+# Python dependencies are minimal - only for ADS symbol reading (optional).
+pyads>=3.4.0

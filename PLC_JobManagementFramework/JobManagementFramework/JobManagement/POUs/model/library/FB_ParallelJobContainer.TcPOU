@@ -1,0 +1,176 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FB_ParallelJobContainer" Id="{6f1bfb39-c90d-44cd-a726-24b4c87f95f3}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_ParallelJobContainer EXTENDS FB_AbstructContainer
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	_initialize :BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="_append_job" Id="{81418414-1797-4aac-a0ce-a5cebe4c8012}">
+      <Declaration><![CDATA[METHOD PROTECTED _append_job : BOOL
+VAR_INPUT
+	executor	: I_Job;
+END_VAR
+VAR
+	_parent_future_id :STRING;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF executor <> 0 AND _num_of_jobs < ParamFuturesLib.MAX_TASK_NUM THEN
+	executor.init();
+	_num_of_jobs := _num_of_jobs + 1;
+	executor.serial := TO_ULINT(_num_of_jobs);
+	
+	_executors[_num_of_jobs] := executor;
+	IF  _executor <> 0 THEN
+		// Propergate task creator object
+		_executors[_num_of_jobs].job_event_observable := _executor.job_event_observable;
+		_executors[_num_of_jobs].parent_executor := _executor;
+		_executors[_num_of_jobs].upstream_aborting := _executor.upstream_aborting;
+		_parent_future_id := _executor.id;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_index_generator_" Id="{dd39dd0c-7557-43d9-b714-1347c8d3d391}">
+      <Declaration><![CDATA[(* This is the generator that iteratively generates references to FB_executor instances*)
+METHOD _index_generator_ : UINT
+VAR_INST
+	_index : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _index > _num_of_jobs THEN
+	_index := 0;
+ELSE
+	_index := _index + 1;
+END_IF
+_index_generator_ := _index;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="abort" Id="{6723fd47-ba3e-4a36-9944-cfce9135076b}">
+      <Declaration><![CDATA[METHOD abort : BOOL // Return TRUE if finish.
+VAR
+	_all_done : BOOL;
+END_VAR
+VAR_INST
+	_executor : I_Job;
+	await : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_all_done := TRUE;
+REPEAT
+	_executor := each_executor;
+	IF _executor <> 0 THEN
+		await := _executor.abort();
+		IF _executor.busy OR NOT await THEN
+			_all_done := FALSE;			
+		END_IF
+	END_IF
+UNTIL
+	_executor = 0
+END_REPEAT
+abort := _all_done;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="execute" Id="{c011c6dd-8dac-426e-8a5d-1e6786a4ab46}">
+      <Declaration><![CDATA[METHOD execute : BOOL // Return TRUE if finish.
+VAR_INST
+	i :UDINT;
+	complete_all_task :BOOL;
+	wait_for_initilize :BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _num_of_jobs = 0 THEN
+	RETURN;
+END_IF
+
+complete_all_task := TRUE;
+FOR i := 1 TO _num_of_jobs DO
+	// Execute all methods
+	IF _executors[i].current_state < E_FutureExecutionState.finish THEN
+		IF NOT _executors[i].execute() THEN
+			complete_all_task := FALSE;
+		END_IF
+	END_IF
+	
+	CASE _executors[i].current_state OF 
+		E_FutureExecutionState.wait_for_process:
+			IF _executors[i].ready AND SUPER^._auto_start THEN
+				_executors[i].start();
+			END_IF
+	END_CASE
+
+	_error_id := 0;	
+	IF FAILED(_executors[i].nErrorID) THEN
+		_error_id := _executors[i].nErrorID;
+	END_IF
+END_FOR
+
+execute := complete_all_task;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="init" Id="{625c2131-03a0-45b4-9fa6-8b896834412c}">
+      <Declaration><![CDATA[METHOD init : BOOL // Return TRUE if finish.
+VAR
+	_executor : I_Job;
+	_init_done : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_init_done := TRUE;
+REPEAT
+	_executor := each_executor;
+	IF _executor <> 0 THEN
+		IF NOT _executor.init() THEN
+			_init_done := FALSE;
+		END_IF
+	END_IF
+UNTIL
+	_executor = 0
+END_REPEAT
+
+_error_id := 0;
+init := _init_done;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="quit" Id="{45e620fb-665e-4cea-b7f5-8d6c239f0a4c}">
+      <Declaration><![CDATA[METHOD quit : BOOL // Return TRUE if finish.
+VAR_INST
+	i: UDINT;
+	complete_all_task :BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[complete_all_task := TRUE;
+FOR i := 1 TO _num_of_jobs DO
+	IF NOT FAILED(_executors[i].nErrorID) THEN
+		_executors[i].execute();
+	ELSE
+		_error_id := _executors[i].nErrorID;
+	END_IF
+	IF NOT (_executors[i].current_state = E_FutureExecutionState.finish) THEN
+		complete_all_task := FALSE;	
+	END_IF
+END_FOR
+
+IF complete_all_task THEN
+	_initialize := FALSE;
+	quit := TRUE;	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

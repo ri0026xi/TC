@@ -1,0 +1,12 @@
+{
+    "solution_path": "C:\\Users\\ktm_a\\OneDrive\\Desktop\\TC\\PLC_JobManagementFramework\\TwinCAT_JobManagementFramework.sln",
+    "tcunit_task_name": "PlcTask",
+    "ams_net_id": "",
+    "tc_version": "",
+    "umrt_instance_path": "C:\\ProgramData\\Beckhoff\\TwinCAT\\3.1\\Runtimes\\UmRT_Default",
+    "timeout_minutes": 5,
+    "tcunit_runner_exe": "C:\\Program Files (x86)\\TcUnit-Runner\\TcUnit-Runner.exe",
+    "ads_dll_path": "C:\\Program Files (x86)\\Beckhoff\\TwinCAT\\3.1\\Components\\Base\\v170\\TwinCAT.Ads.dll",
+    "variant_test": "Test",
+    "variant_release": "Release"
+}

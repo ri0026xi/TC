@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <Itf Name="I_Future" Id="{882bc581-e126-40c6-885e-c12ccc2f0bb9}">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+INTERFACE I_Future EXTENDS __System.IQueryInterface 
+]]></Declaration>
+    <Method Name="abort" Id="{527ff0b5-6fbb-4ad6-b3f1-4a79b5e73d86}">
+      <Declaration><![CDATA[METHOD abort : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="error_reset" Id="{a9eb976f-3758-4671-96e5-921c7b463a22}">
+      <Declaration><![CDATA[METHOD error_reset : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="execute" Id="{4a0b4721-18ea-4776-928a-5b24c49dda75}">
+      <Declaration><![CDATA[METHOD execute : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="executor" Id="{1ffce432-14a7-4918-9f9c-90ae1bb1d90d}">
+      <Declaration><![CDATA[PROPERTY executor : I_Job]]></Declaration>
+      <Get Name="Get" Id="{a1986d22-3041-4060-aadc-fc03953d80fb}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{cb8b03d6-1988-4e67-b1fe-27b0d43d581d}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="future_name" Id="{89ef3158-3550-438a-bee3-821a3cca9058}">
+      <Declaration><![CDATA[PROPERTY future_name : STRING // Name of future.]]></Declaration>
+      <Get Name="Get" Id="{d6d11718-73bb-4401-91ac-a3e6b656d939}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{1b08d5ef-7e1e-4062-a60e-52a0fb1809f4}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="init" Id="{d56cdce8-543b-417d-80a1-0c782146e5ce}">
+      <Declaration><![CDATA[METHOD init : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="nErrorID" Id="{091e3808-1f21-4039-8bcc-e07988c843df}">
+      <Declaration><![CDATA[PROPERTY nErrorID : HRESULT // Set result code when finished any method. 0 should be set when normal case.]]></Declaration>
+      <Get Name="Get" Id="{3dfc56f5-414c-4e9f-8318-d6a9044e8070}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="persistent_future" Id="{31178402-da73-4433-b646-5ce9b39fb92c}">
+      <Declaration><![CDATA[PROPERTY persistent_future : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3f93484e-26d1-43a7-8e1c-b71a9d011e8a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{76333ad6-86fb-44d3-8bba-0f2650e01274}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="quit" Id="{12e3433d-9567-4756-bdca-54fc6f4c2614}">
+      <Declaration><![CDATA[METHOD quit : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="state" Id="{b673a454-4761-427b-8ab4-14bd1622c60c}">
+      <Declaration><![CDATA[PROPERTY state : E_FutureExecutionState // Execution state of this future.]]></Declaration>
+      <Get Name="Get" Id="{4b1cfb02-a56c-4f6f-980b-64cbecfe2458}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{6d81734e-97aa-4d5c-8baf-2d15120c0679}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+  </Itf>
+</TcPlcObject>

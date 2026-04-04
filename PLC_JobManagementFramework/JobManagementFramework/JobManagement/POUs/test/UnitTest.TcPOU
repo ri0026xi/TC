@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="UnitTest" Id="{3459d50f-46c2-4d8b-9955-5e66ae56a75a}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM UnitTest
+VAR
+{IF NOT defined (Release)}
+	fbTaskRunner_Test : FB_TaskRunner_Test;
+{END_IF}
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[{IF NOT defined (Release)}
+fbTaskRunner_Test();
+TcUnit.RUN();
+{END_IF}
+]]></ST>
+    </Implementation>
+    <LineIds Name="UnitTest">
+      <LineId Id="5" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,338 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FB_AbstructContainer" Id="{46d2dd9f-d184-4cfa-9aff-69a59f15f058}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK ABSTRACT FB_AbstructContainer EXTENDS FB_AbstructFuture IMPLEMENTS I_Container
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	_executors : ARRAY [1..ParamFuturesLib.MAX_TASK_NUM] OF I_Job;
+	_start :BOOL;
+	_auto_start : BOOL := TRUE;
+	_abort : BOOL;
+	_num_of_jobs: UDINT;
+	_continuous_mode : BOOL;
+	_job_event_reporter : I_JobInfo;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="_append_job" Id="{315df683-52d1-4e5d-86b1-6ab553e8e166}">
+      <Declaration><![CDATA[METHOD PROTECTED _append_job : BOOL
+VAR_INPUT
+	executor	: I_Job;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_index_generator_" Id="{0b7627ee-07d1-41a3-a3fd-74c088c2456f}">
+      <Declaration><![CDATA[(* This is the generator that iteratively generates references to FB_executor instances*)
+METHOD _index_generator_ : UINT
+VAR_INST
+	_index : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_index := _index + 1;
+IF _index > _num_of_jobs THEN
+	_index := 0;
+END_IF
+_index_generator_ := _index;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="abort" Id="{23665256-0f2f-44c3-be2f-ee678ea49cf6}">
+      <Declaration><![CDATA[METHOD abort : BOOL // Return TRUE if finish.
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="append_job" Id="{0a19466a-05de-4dc5-9d2f-632032e1c8b9}">
+      <Declaration><![CDATA[METHOD append_job : I_Job
+VAR_INPUT
+	executor	: I_Job;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[executor.persistent_job := TRUE;
+THIS^._append_job(executor);
+append_job := executor;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="auto_start" Id="{f841be87-7a96-47cf-9cba-0bbcca93df8a}">
+      <Declaration><![CDATA[{warning 'Add property implementation'}
+PROPERTY auto_start : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{d8b84932-c4d3-483e-8248-028427da2f13}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[auto_start := _auto_start;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0124f128-7875-4c8d-b9a7-bd0d51756c12}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_auto_start := auto_start;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="continuous_mode" Id="{3a1353f8-fa48-4a3b-b301-66f41b3b7d2d}">
+      <Declaration><![CDATA[PROPERTY continuous_mode : BOOL
+]]></Declaration>
+      <Set Name="Set" Id="{815a2f7d-2b27-44c6-8840-db690ef90089}">
+        <Declaration><![CDATA[VAR
+	_executor : I_Job;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_continuous_mode := continuous_mode;
+REPEAT
+	_executor := THIS^.each_executor;
+	IF _executor <> 0 THEN
+		_executor.continuous_mode := continuous_mode;
+	END_IF
+UNTIL
+	_executor = 0
+END_REPEAT
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="create_container" Id="{7216e074-e567-4ea0-8a8c-8dd59265c004}">
+      <Declaration><![CDATA[METHOD create_container : I_Job
+VAR_INPUT
+	container_type	: ContainerType;
+	name	: STRING;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE container_type OF
+	ContainerType.BATCH:
+		create_container := THIS^.create_job(GVL.batch_job_container_creator,name);
+	ContainerType.PARALLEL:
+		create_container := THIS^.create_job(GVL.parallel_job_container_creator,name);
+	ContainerType.QUEUE:
+		create_container := THIS^.create_job(GVL.queue_job_container_creator,name);
+	ContainerType.PARALLEL_QUEUE:
+		create_container := THIS^.create_job(GVL.parallel_queue_job_container_creator,name);
+END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="create_job" Id="{21724226-f623-4c15-a6ab-72a64d79a6ba}">
+      <Declaration><![CDATA[METHOD create_job : I_Job
+VAR_INPUT
+	creator	: I_TaskCreator;
+	future_name	: STRING;
+END_VAR
+VAR
+	future : I_Future;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _num_of_jobs < ParamFuturesLib.MAX_TASK_NUM THEN
+	future := creator.create_future(future_name);
+	create_job := THIS^.spawn_job(future);
+	create_job.persistent_job := FALSE;
+	IF create_job <> 0 THEN
+		create_job.future_creator := creator;
+	ELSE
+		creator.destroy_future(future);
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="each_executor" Id="{8453469b-ea46-4491-b954-4ed28a7a542c}">
+      <Declaration><![CDATA[PROPERTY each_executor : I_Job
+]]></Declaration>
+      <Get Name="Get" Id="{49e3e8d4-cf33-4142-90c3-c2fc47108f60}">
+        <Declaration><![CDATA[VAR
+	_index : UINT;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_index := _index_generator_();
+IF _index > 0 THEN
+	IF _executors[_index] <> 0 THEN
+		IF _executors[_index] <> 0 THEN
+			each_executor := _executors[_index];
+		ELSE
+			each_executor := 0;
+		END_IF
+	END_IF
+ELSE
+	each_executor := 0;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="error_reset" Id="{f07bf105-b4dd-40f2-a358-122c05ce0eca}">
+      <Declaration><![CDATA[METHOD error_reset : BOOL
+VAR
+	_executor : I_Job;
+	complete : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[complete := TRUE;
+REPEAT
+	_executor := each_executor;
+	IF _executor <> 0 THEN
+		IF NOT _executor.error_reset() THEN
+			complete := FALSE;
+		END_IF
+	END_IF
+UNTIL
+	_executor = 0
+END_REPEAT
+IF complete THEN
+	_error_id := 0;
+END_IF
+error_reset := complete;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="init" Id="{8b026f10-89d6-40c5-a4e1-421de953942d}">
+      <Declaration><![CDATA[METHOD init : BOOL // Return TRUE if finish.
+VAR
+	_each_executor : i_Job;
+	_init_done : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_init_done := TRUE;
+REPEAT
+	_each_executor := THIS^.each_executor;
+	IF _each_executor <> 0 THEN
+		IF NOT _each_executor.init() THEN
+			_init_done := FALSE;
+		END_IF
+	END_IF
+UNTIL
+	_each_executor = 0
+END_REPEAT
+
+_error_id := 0;
+init := _init_done;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="num_of_jobs" Id="{67188b4f-1a89-4b9f-b67d-5081688517b7}">
+      <Declaration><![CDATA[PROPERTY num_of_jobs : UDINT]]></Declaration>
+      <Get Name="Get" Id="{ab866391-1024-4dc6-8119-247b033456f6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[num_of_jobs := _num_of_jobs;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{8f009588-0c4c-4f1d-af0d-5fccbdecc225}">
+      <Declaration><![CDATA[METHOD reset : BOOL // Return TRUE if finish.
+VAR_INPUT
+	deep : BOOL := FALSE;
+END_VAR
+VAR
+	i : UINT;
+	_delete_counter : UINT;
+	_p_executor : POINTER TO FB_Executor;
+	text : STRING;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_delete_counter := 0;
+REPEAT
+	i := _index_generator_();
+	IF _num_of_jobs > _delete_counter AND i > 0 THEN
+		IF _executors[i] <> 0 THEN
+			IF _executors[i].reset(deep) THEN
+				IF __QUERYPOINTER(_executors[i],_p_executor) THEN
+					__DELETE(_p_executor);
+				ELSE
+					_executors[i] := 0;
+				END_IF
+				_delete_counter := _delete_counter + 1;
+			END_IF
+		END_IF
+	END_IF
+UNTIL
+	i = 0
+END_REPEAT
+_num_of_jobs := _num_of_jobs - _delete_counter;
+reset := _num_of_jobs = 0;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resume" Id="{70ea49d5-1b0f-4247-9f85-25d56c070d0b}">
+      <Declaration><![CDATA[METHOD resume : BOOL
+VAR
+	_all_done : BOOL;
+END_VAR
+VAR_INST
+	_executor : I_Job;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_all_done := TRUE;
+REPEAT
+	_executor := THIS^.each_executor;
+	IF _executor <> 0 THEN
+		IF NOT _executor.resume() THEN
+			_all_done := FALSE;
+		END_IF
+	END_IF
+UNTIL
+	_executor = 0
+END_REPEAT
+resume := _all_done;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="spawn_job" Id="{851bbe10-8432-4972-a365-3ae0b2c9678a}">
+      <Declaration><![CDATA[METHOD spawn_job : I_Job
+VAR_INPUT
+	future : I_Future;
+	job_persistence : BOOL := FALSE;
+END_VAR
+VAR
+	_spawned_executor : POINTER TO FB_Executor;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF future <> 0 THEN
+	_spawned_executor := __NEW(FB_Executor);
+	_spawned_executor^.future := future;
+	_spawned_executor^.persistent_job := job_persistence;
+	_append_job(_spawned_executor^);
+	spawn_job := _spawned_executor^;
+ELSE
+	spawn_job := 0;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="state" Id="{0787333d-d78b-47c5-ae65-96c128c18d53}">
+      <Declaration><![CDATA[PROPERTY state : E_FutureExecutionState
+]]></Declaration>
+      <Get Name="Get" Id="{57b84c55-b41a-4b81-9343-8cda5eb0e5d2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[state := _state;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{eddff30a-e2d0-43a8-a3c6-2e3626040266}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_state := state;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+  </POU>
+</TcPlcObject>

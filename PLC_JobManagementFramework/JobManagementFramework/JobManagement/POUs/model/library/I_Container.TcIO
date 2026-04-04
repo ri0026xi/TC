@@ -1,0 +1,85 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <Itf Name="I_Container" Id="{24bfec70-0f3a-4ec1-a89e-5407d9c94d6d}">
+    <Declaration><![CDATA[INTERFACE I_Container EXTENDS __SYSTEM.IQueryInterface 
+]]></Declaration>
+    <Method Name="_index_generator_" Id="{9ec47763-c977-452b-946a-3a4851940c77}">
+      <Declaration><![CDATA[(* This is the generator that iteratively generates references to FB_executor instances*)
+METHOD _index_generator_ : UINT;
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="append_job" Id="{3242dd7f-8422-475c-9ef2-fac3e07fa8b2}">
+      <Declaration><![CDATA[METHOD append_job : I_Job
+VAR_INPUT
+	executor	: I_Job;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="auto_start" Id="{7edf24c9-2dd1-4e3e-8cf1-31451a83eaea}">
+      <Declaration><![CDATA[PROPERTY auto_start : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d18e8750-e056-41ae-9771-67ae38337645}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+      <Set Name="Set" Id="{f506afae-2c66-4eb1-94f0-ea5493073e74}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Property Name="continuous_mode" Id="{97d37245-0a02-4783-8ab5-0f90cb1fc2d0}">
+      <Declaration><![CDATA[PROPERTY continuous_mode : bool]]></Declaration>
+      <Set Name="Set" Id="{67c23647-8ef5-47ae-81ce-913de28a5e0e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Set>
+    </Property>
+    <Method Name="create_container" Id="{e55dfbbc-91c0-448f-b41c-696bb7a50e91}">
+      <Declaration><![CDATA[METHOD create_container : I_Job
+VAR_INPUT
+	container_type : ContainerType;
+	name: STRING;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="create_job" Id="{65cf060d-dd4c-4119-bcf8-79a9d41aeea7}">
+      <Declaration><![CDATA[METHOD create_job : I_Job
+VAR_INPUT
+	creator : I_TaskCreator;
+	future_name: STRING;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="each_executor" Id="{9e169ab1-5bb0-4c6d-a933-f3ef71b48570}">
+      <Declaration><![CDATA[PROPERTY each_executor : I_Job]]></Declaration>
+      <Get Name="Get" Id="{c8f368de-7b29-4b83-b05b-66036611f351}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="num_of_jobs" Id="{d2ea81f8-5b50-4206-8ac4-a659b005d749}">
+      <Declaration><![CDATA[PROPERTY num_of_jobs : UDINT]]></Declaration>
+      <Get Name="Get" Id="{d6c36387-8265-4426-b60b-3980556d0e1c}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{cf0bbd9b-2cd6-46f3-b203-68cba1d854bb}">
+      <Declaration><![CDATA[METHOD reset : BOOL // Return TRUE if finish.
+VAR_INPUT
+	deep : BOOL := FALSE;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="resume" Id="{597002ce-cb7b-432c-9246-ab23473411e0}">
+      <Declaration><![CDATA[METHOD resume : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="spawn_job" Id="{d49e697a-f8c3-49c2-92d4-238e4a1c4453}">
+      <Declaration><![CDATA[METHOD spawn_job : I_Job
+VAR_INPUT
+	future : I_Future;
+	job_persistence : BOOL := FALSE;
+END_VAR
+]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

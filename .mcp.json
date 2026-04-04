@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx.cmd",
+      "args": ["-y", "@modelcontextprotocol/server-github@2025.4.8"]
+    },
+    "context7": {
+      "command": "npx.cmd",
+      "args": ["-y", "@upstash/context7-mcp@2.1.4"]
+    },
+    "memory": {
+      "command": "npx.cmd",
+      "args": ["-y", "@modelcontextprotocol/server-memory@2026.1.26"]
+    },
+    "playwright": {
+      "command": "npx.cmd",
+      "args": ["-y", "@playwright/mcp@0.0.69", "--extension"]
+    },
+    "sequential-thinking": {
+      "command": "npx.cmd",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking@2025.12.18"]
+    }
+  }
+}

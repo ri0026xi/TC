@@ -1,0 +1,288 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FB_TaskRunner" Id="{edfadf07-67d2-4234-8c66-349c9bc50ad5}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TaskRunner
+VAR_INPUT
+	error_reset : BOOL; // Error reset
+	root_job_serial : ULINT := 999;
+	root_job_name : STRING := 'ROOT';
+	upstream_aborting : BOOL := FALSE; // 
+	continuous_mode : BOOL := TRUE;
+END_VAR
+VAR_OUTPUT
+	job_empty : BOOL;
+	job_namespace : T_MaxString;
+	num_of_jobs : UDINT;
+END_VAR
+VAR
+	_executor: FB_Executor; // main Executor
+	_observable : FB_JobInfoPublisher;
+	last_job_number : UDINT;
+	job_event_log_str : FB_JobEventLogStr;	// ジョブイベントをメッセージとしてログ出力するサブスクライバ
+	job_event_cyclic_output : FB_JobEventCyclicOutput;	// ADS通信向けにジョブイベントをサイクル単位で出力するためのサブスクライバ
+	
+	
+	fbGetTimeZoneInformation	: FB_GetTimeZoneInformation := (bExecute := TRUE);
+	localTime : FB_LocalSystemTime := (bEnable := TRUE);
+	tzinfo : FB_GetTimeZoneInformation := (bExecute := TRUE);
+	getSystemtime : FB_TzSpecificLocalTimeToSystemTime;
+	_current_time : T_FILETIME64;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// 現在時刻の取得
+localTime();
+tzinfo();
+getSystemtime(in := localTime.systemTime, tzInfo := tzinfo.tzInfo);
+_current_time := SYSTEMTIME_TO_FILETIME64(getSystemtime.out);
+_executor.current_timestamp := ADR(_current_time);
+
+// Job event log for ADS output 
+job_event_cyclic_output(); 
+
+
+_executor.execute();
+num_of_jobs := _executor.children.num_of_jobs;
+
+job_empty := last_job_number > 0 AND _executor.children.num_of_jobs = 0;
+last_job_number := _executor.children.num_of_jobs;
+
+
+IF _executor.ready THEN
+	_executor.start();
+END_IF
+]]></ST>
+    </Implementation>
+    <Method Name="abort" Id="{2ec2cfb5-6aac-4b5d-a579-c21b8f186b53}">
+      <Declaration><![CDATA[METHOD abort : BOOL
+VAR_INPUT
+	job : I_Job := 0;
+END_VAR
+VAR
+	_child_executor : I_Job;
+	all_aborted : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _executor.children = 0 THEN
+	RETURN;
+END_IF
+
+IF job = 0 OR num_of_jobs = 0 THEN
+	all_aborted := TRUE;
+END_IF
+REPEAT
+	_child_executor := _executor.children.each_executor;
+	IF _child_executor <> 0 THEN
+		IF job <> 0 THEN
+			IF job = _child_executor THEN
+				all_aborted := _child_executor.abort();
+			END_IF
+		ELSE
+			IF NOT _child_executor.abort() THEN
+				all_aborted := FALSE;
+			END_IF
+		END_IF
+
+	END_IF
+UNTIL
+	_child_executor = 0
+END_REPEAT
+
+abort := all_aborted;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="append_future" Id="{c8cf10ac-651e-4b55-936b-7741712b04f9}">
+      <Declaration><![CDATA[METHOD append_future : I_Job
+VAR_INPUT
+	future : I_Future;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _executor.children = 0 THEN
+	RETURN;
+END_IF
+
+append_future := _executor.children.spawn_job(future);
+job_namespace := append_future.namespace;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="append_job" Id="{9478587e-18c8-434e-9e7a-ea7720add6db}">
+      <Declaration><![CDATA[METHOD append_job : I_Job
+VAR_INPUT
+	job : I_Job;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _executor.children = 0 THEN
+	append_job := 0;
+	RETURN;
+END_IF
+
+append_job := _executor.children.append_job(job);
+job_namespace := _executor.namespace;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="create_job" Id="{a15036f3-9f48-47bc-9e23-41ed0b98d15a}">
+      <Declaration><![CDATA[METHOD create_job : I_Job
+VAR_INPUT
+	creator : I_TaskCreator;
+	name : STRING;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _executor.children = 0 THEN
+	RETURN;
+END_IF
+
+create_job := _executor.children.create_job(creator, name);
+job_namespace := _executor.namespace;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="current_time" Id="{733c3f04-df9a-4331-b0bb-3b0f201ba069}">
+      <Declaration><![CDATA[PROPERTY current_time : T_FILETIME64]]></Declaration>
+      <Get Name="Get" Id="{eb2753a7-184e-4bea-818e-b7c939362163}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[current_time := _current_time;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="error_reset" Id="{49e44ab9-6fa5-4b48-b4fc-2124df79f2ad}">
+      <Declaration><![CDATA[METHOD error_reset : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[error_reset := _executor.error_reset();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_Init" Id="{5458cc6a-18c3-46ab-b74b-8ef5cc2836f1}">
+      <Declaration><![CDATA[//FB_Init is always available implicitly and it is used primarily for initialization.
+//The return value is not evaluated. For a specific influence, you can also declare the
+//methods explicitly and provide additional code there with the standard initialization
+//code. You can evaluate the return value.
+METHOD FB_Init: BOOL
+VAR_INPUT
+    bInitRetains: BOOL; // TRUE: the retain variables are initialized (reset warm / reset cold)
+    bInCopyCode: BOOL;  // TRUE: the instance will be copied to the copy code afterward (online change)
+	container_type : ContainerType := ContainerType.QUEUE;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_executor.job_event_observable := _observable;
+_observable.add_observer(job_event_log_str);
+_observable.add_observer(job_event_cyclic_output);
+_executor.upstream_aborting := upstream_aborting;
+_executor.create_container(container_type, root_job_name);
+_executor.continuous_mode := continuous_mode;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="job_clear" Id="{a712ddb7-5b8d-43cd-9202-b9ce0095b19b}">
+      <Declaration><![CDATA[METHOD job_clear : BOOL
+VAR_INPUT
+	job : I_Job := 0;
+END_VAR
+VAR
+	_child_executor : I_Job;
+	all_clear : BOOL;
+	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _executor.children = 0 THEN
+	job_clear := TRUE;
+	RETURN;
+END_IF
+
+job_clear := _executor.children.reset(FALSE);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="job_event_observable" Id="{947c7939-e057-4dfe-be01-9957111d99a8}">
+      <Declaration><![CDATA[PROPERTY job_event_observable : I_Observable]]></Declaration>
+      <Get Name="Get" Id="{17c56140-6fb9-4d59-948b-42e2f681725d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[job_event_observable := _executor.job_event_observable;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f479983c-3a32-4080-975e-175a536cc1c1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_executor.job_event_observable := job_event_observable;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="quit" Id="{4ec2c2c1-9796-48ac-b58a-9925be5beab4}">
+      <Declaration><![CDATA[METHOD quit : BOOL
+VAR_INPUT
+	job : I_Job := 0;
+END_VAR
+VAR
+	_child_executor : I_Job;
+	all_quit: BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _executor.children = 0 THEN
+	RETURN;
+END_IF
+
+IF job = 0 OR num_of_jobs = 0 THEN
+	all_quit := TRUE;
+END_IF
+
+REPEAT
+	_child_executor := _executor.children.each_executor;
+	IF _child_executor <> 0 THEN
+		IF job <> 0 THEN
+			IF job = _child_executor THEN
+				all_quit := _child_executor.quit();
+			END_IF
+		ELSE
+			IF NOT _child_executor.quit() THEN
+				all_quit := FALSE;
+			END_IF
+		END_IF
+
+	END_IF
+UNTIL
+	_child_executor = 0
+END_REPEAT
+
+quit := all_quit;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="restart" Id="{f5c869ca-d4d1-4b5b-bcf6-2f154bba62ac}">
+      <Declaration><![CDATA[METHOD restart : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _executor.error_reset() THEN
+	restart := _executor.resume();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="root_executor" Id="{6593cc12-1f35-444c-8ca5-989cc3fd8171}">
+      <Declaration><![CDATA[PROPERTY root_executor : I_Job]]></Declaration>
+      <Get Name="Get" Id="{ef19ae3b-d43d-4c19-bc32-8310228e9dc7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[root_executor := _executor;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>

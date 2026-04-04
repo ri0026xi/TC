@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites failures="0" tests="8">
+  <testsuite id="0" name="UnitTest.fbTaskRunner_Test" tests="1" failures="0">
+    <testcase name="_01_TrueIsTrue" assertions="0" classname="UnitTest.fbTaskRunner_Test" status="PASS" />
+  </testsuite>
+  <testsuite id="1" name="UnitTest.fbExecutor_Test" tests="2" failures="0">
+    <testcase name="_01_InitialStateIsIdle" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="_02_PersistentJobDefaultTrue" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+  </testsuite>
+  <testsuite id="2" name="UnitTest.fbContainer_Test" tests="5" failures="0">
+    <testcase name="_01_QueueInitialEmpty" assertions="0" classname="UnitTest.fbContainer_Test" status="PASS" />
+    <testcase name="_02_QueueStateIsIdle" assertions="0" classname="UnitTest.fbContainer_Test" status="PASS" />
+    <testcase name="_01_TrueIsTrue" assertions="0" classname="UnitTest.fbContainer_Test" status="PASS" />
+    <testcase name="_01_InitialStateIsIdle" assertions="0" classname="UnitTest.fbContainer_Test" status="PASS" />
+    <testcase name="_02_PersistentJobDefaultTrue" assertions="0" classname="UnitTest.fbContainer_Test" status="PASS" />
+  </testsuite>
+</testsuites>

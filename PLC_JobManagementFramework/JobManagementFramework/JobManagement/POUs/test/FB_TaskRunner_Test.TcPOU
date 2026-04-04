@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="FB_TaskRunner_Test" Id="{d3f43d38-44f6-4522-94b7-30859937d93c}" SpecialFunc="None">
+    <Declaration><![CDATA[{IF NOT defined (Release)}
+FUNCTION_BLOCK FB_TaskRunner_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+END_VAR
+{END_IF}
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[{IF NOT defined (Release)}
+_01_TrueIsTrue();
+{END_IF}]]></ST>
+    </Implementation>
+    <Method Name="_01_TrueIsTrue" Id="{6358bad8-d4a6-48f3-9345-71976b3725f0}">
+      <Declaration><![CDATA[{IF NOT defined (Release)}
+METHOD PRIVATE _01_TrueIsTrue
+VAR
+END_VAR
+{END_IF}]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[{IF NOT defined (Release)}
+TEST('_01_TrueIsTrue');
+
+AssertTrue(
+	Condition := TRUE,
+	Message := 'True should always be true'
+);
+
+TEST_FINISHED();
+{END_IF}]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_TaskRunner_Test">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TaskRunner_Test._01_MinimalStateCheck">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

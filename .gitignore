@@ -1,0 +1,16 @@
+# Logs
+*.log
+tdd_log.txt
+
+# TwinCAT build artifacts
+_CompileInfo/
+_Boot/
+*.tmc
+*.tpzip
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE
+.vs/

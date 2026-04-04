@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/twincat_tdd.py*)",
+      "Bash(python:*)",
+      "Bash(tasklist)",
+      "PowerShell(Get-ChildItem:*)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "github",
+    "context7",
+    "exa",
+    "memory",
+    "playwright",
+    "sequential-thinking"
+  ]
+}

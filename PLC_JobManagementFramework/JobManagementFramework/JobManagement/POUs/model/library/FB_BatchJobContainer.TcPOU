@@ -1,0 +1,192 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FB_BatchJobContainer" Id="{ab0c8e7a-22b8-4e02-8212-007ab26f1e0f}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_BatchJobContainer EXTENDS FB_AbstructContainer IMPLEMENTS I_SerialContainer
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	_all_abort : BOOL;
+	current_executing_future_id : UINT;
+	current_executing_future : I_Future;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="_append_job" Id="{9f51bca3-2eeb-4364-9ec6-76051ede9dd5}">
+      <Declaration><![CDATA[METHOD PROTECTED _append_job : BOOL
+VAR_INPUT
+	executor	: I_Job;
+END_VAR
+VAR
+	_parent_future_id: STRING;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF executor <> 0 AND _num_of_jobs < ParamFuturesLib.MAX_TASK_NUM THEN
+	executor.init();
+	IF _num_of_jobs > 0 THEN
+		_executors[_num_of_jobs].next_job := executor;
+		executor.previous_job := _executors[_num_of_jobs];
+	END_IF
+	_num_of_jobs := _num_of_jobs + 1;
+	executor.serial := TO_ULINT(_num_of_jobs);
+	
+	_executors[_num_of_jobs] := executor;
+	IF  _executor <> 0 THEN
+		// Propergate task creator object
+		_executors[_num_of_jobs].job_event_observable := _executor.job_event_observable;
+		_executors[_num_of_jobs].parent_executor := _executor;
+		_executors[_num_of_jobs].upstream_aborting := _executor.upstream_aborting;
+		_parent_future_id := _executor.id;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_index_generator_" Id="{4d063668-d033-4039-b03e-0be138f8b138}">
+      <Declaration><![CDATA[(* This is the generator that iteratively generates references to FB_executor instances*)
+METHOD _index_generator_ : UINT
+VAR_INST
+	_index : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_index := _index + 1;
+IF _index > _num_of_jobs THEN
+	_index := 0;
+END_IF
+_index_generator_ := _index;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="abort" Id="{df529d65-dccb-41d9-a15b-0d233c35e0bc}">
+      <Declaration><![CDATA[METHOD abort : BOOL // Return TRUE if finish.
+VAR_INST
+	await : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[await := _executors[current_executing_future_id].abort();
+abort := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="current_job" Id="{9c2eda39-4344-41cd-aa92-800b9c8573f6}">
+      <Declaration><![CDATA[PROPERTY current_job : I_Job]]></Declaration>
+      <Get Name="Get" Id="{5009cefa-e37e-46c1-8060-2ec01ecad11d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[current_job := _executors[current_executing_future_id];]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="execute" Id="{3a50f198-985b-4ce4-97c9-3b4f8b04dcb5}">
+      <Declaration><![CDATA[METHOD execute : BOOL // Return TRUE if finish.
+VAR_INST
+	i :UDINT;
+	complete_last_proess :BOOL;
+	complete_all_process :BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _num_of_jobs = 0 THEN
+	RETURN;
+END_IF
+
+
+
+FOR i := 1 TO _num_of_jobs DO
+	complete_all_process := _executors[i].execute();
+	_error_id := _executors[i].nErrorID;
+END_FOR
+
+IF current_executing_future_id > 1 THEN
+	complete_last_proess := _executors[current_executing_future_id - 1].done;
+ELSE
+	complete_last_proess := TRUE;
+END_IF
+
+CASE _executors[current_executing_future_id].current_state OF
+	E_FutureExecutionState.init, E_FutureExecutionState.process, E_FutureExecutionState.quit:
+		_all_abort := FALSE;
+		IF _abort THEN
+			IF _executors[current_executing_future_id].abort() THEN
+				_all_abort := TRUE;
+			END_IF
+		END_IF
+	E_FutureExecutionState.wait_for_process:
+		IF _executors[current_executing_future_id].ready AND complete_last_proess AND SUPER^._auto_start THEN
+			_executors[current_executing_future_id].start();
+		END_IF
+END_CASE
+
+IF complete_all_process THEN
+	execute := NOT _continuous_mode;
+ELSIF _executors[current_executing_future_id].done AND current_executing_future_id < _num_of_jobs THEN
+	execute := FALSE;
+	current_executing_future_id := current_executing_future_id + 1;
+END_IF
+
+current_executing_future := _executors[current_executing_future_id].future;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="init" Id="{5ef2a4ac-f57b-470f-97a3-ba7305857e0b}">
+      <Declaration><![CDATA[METHOD init : BOOL // Return TRUE if finish.
+VAR
+	_executor : I_Job;
+	_init_done : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_init_done := TRUE;
+REPEAT
+	_executor := each_executor;
+	IF _executor <> 0 THEN
+		IF NOT _executor.init() THEN
+			_init_done := FALSE;
+		END_IF
+	END_IF
+UNTIL
+	_executor = 0
+END_REPEAT
+
+current_executing_future_id := 1;
+_error_id := 0;
+init := _init_done;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="quit" Id="{7bdf3f44-47c5-4d23-b936-9fe467aec209}">
+      <Declaration><![CDATA[METHOD quit : BOOL // Return TRUE if finish.
+VAR_INST
+	i: UDINT;
+	complete_all_task :BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[complete_all_task := TRUE;
+FOR i := 1 TO _num_of_jobs DO
+	_executors[i].execute();
+	IF NOT (_executors[i].current_state = E_FutureExecutionState.finish) THEN
+		complete_all_task := FALSE;	
+	END_IF
+END_FOR
+IF complete_all_task THEN
+	current_executing_future_id := 1;
+	quit := TRUE;
+ELSE
+	quit := FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resume" Id="{95a869b1-5218-4fef-8feb-47be8459cb7d}">
+      <Declaration><![CDATA[METHOD resume : BOOL
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[resume := _executors[current_executing_future_id].resume();
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

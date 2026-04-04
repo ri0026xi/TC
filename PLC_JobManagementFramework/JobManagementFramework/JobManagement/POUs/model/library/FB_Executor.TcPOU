@@ -1,0 +1,842 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FB_Executor" Id="{09518444-1d1d-452e-9e8f-647b2f8c5e33}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_Executor IMPLEMENTS I_Job
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	{attribute 'TcEncoding':='UTF-8'}
+	_namespace : T_MaxString;
+	_id : T_MaxString;
+	_done : BOOL;
+	_start : BOOL;
+	_resume : BOOL;
+	_passive_abort : BOOL;
+	_quit : BOOL;
+	_upstream_aborting : BOOL := FALSE;
+	 {attribute 'TcAnalytics'}
+	 _state :E_FutureExecutionState := E_FutureExecutionState.idle;
+	_last_state  :E_FutureExecutionState;
+	_error_id : HRESULT;
+	_aborting :BOOL;
+	_quitting :BOOL;
+	_interface_container : I_Container := 0;
+	_job_event_observable : I_Observable;
+	_future_creator : I_TaskCreator;
+	_future : I_Future;
+	_parent_job : I_Job := 0;
+	_persistent_job : BOOL := TRUE;
+	_current_timestamp : POINTER TO T_FILETIME64 := 0;
+	_previous_job : I_Job;
+	_next_job : I_Job;
+	_transition : BOOL;
+END_VAR
+VAR PERSISTENT
+	_serial	: ULINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="abort" Id="{4a5ac73d-0cc9-4d9e-84fc-915012ed9ab4}">
+      <Declaration><![CDATA[(*abort method
+
+*)
+METHOD abort : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _state = E_FutureExecutionState.init OR
+   _state = E_FutureExecutionState.process OR
+   _state = E_FutureExecutionState.quit THEN
+   	_start := FALSE;
+	_passive_abort := TRUE;
+	abort := FALSE;
+ELSE
+	IF _state = E_FutureExecutionState.abort THEN
+		abort := NOT _aborting;
+	ELSE
+		abort := TRUE;
+	END_IF
+END_IF
+THIS^.execute();]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="busy" Id="{4599679c-a89e-4edf-a42c-abccebfc0bd6}">
+      <Declaration><![CDATA[PROPERTY busy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{31f63b84-9fea-4918-ac72-b4f3235d586f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[busy := (	_state = E_FutureExecutionState.init OR	
+			_state = E_FutureExecutionState.process OR 
+			_state = E_FutureExecutionState.quit
+		);
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="children" Id="{db662496-7037-4faa-b7c6-23f2d18395d1}">
+      <Declaration><![CDATA[PROPERTY children : I_Container // Accesser for interface pointer to child container instance.]]></Declaration>
+      <Get Name="Get" Id="{b5bd3ec9-ba69-4ba1-8ec7-43c8c7dc9772}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[children := _interface_container;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="continuous_mode" Id="{f813b158-0532-443d-867f-f3f4c7f7b526}">
+      <Declaration><![CDATA[PROPERTY continuous_mode : bool // Make true if keep executing state after all jobs be finished.]]></Declaration>
+      <Set Name="Set" Id="{d13ba071-7139-40fe-a4d6-bf1103d7257f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF _interface_container <> 0 THEN
+	_interface_container.continuous_mode := continuous_mode;
+END_IF
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="create_container" Id="{3ee4e0b3-d5fa-4216-b2fc-b9b451f3b414}">
+      <Declaration><![CDATA[METHOD create_container : I_Container // Make container object onto child.
+VAR_INPUT
+	container_type : ContainerType; // specify container type
+	name: STRING;	// specify future name
+END_VAR
+VAR
+	delete_existing_container : BOOL;
+	created_future : I_Future;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _interface_container <> 0 THEN
+ 	IF _interface_container.reset(FALSE) THEN
+		delete_existing_container := TRUE;
+	ELSE
+		delete_existing_container := FALSE;
+	END_IF
+ELSE
+	delete_existing_container := TRUE;
+END_IF
+
+IF delete_existing_container THEN
+	CASE container_type OF
+		ContainerType.BATCH:
+			created_future := create_future(GVL.batch_job_container_creator, name);
+			created_future.executor.persistent_job := FALSE;
+		ContainerType.PARALLEL:
+			created_future := create_future(GVL.parallel_job_container_creator, name);
+			created_future.executor.persistent_job := FALSE;
+		ContainerType.QUEUE:
+			created_future := create_future(GVL.queue_job_container_creator, name);
+			created_future.executor.persistent_job := TRUE;
+		ContainerType.PARALLEL_QUEUE:
+			created_future := create_future(GVL.parallel_queue_job_container_creator, name);
+			created_future.executor.persistent_job := TRUE;
+	END_CASE
+	THIS^.init();
+	create_container := THIS^.children;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="create_future" Id="{4dbfc7cf-833f-45fc-a4dd-f4a1587ef4ef}">
+      <Declaration><![CDATA[METHOD create_future : I_Future // Create future dynamically.
+VAR_INPUT
+	creator : I_TaskCreator; // Specify creator object by which Interface Task Creator implemented.
+	future_name: STRING; // Spcfigy future name.
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_future_creator := creator;
+IF _future_creator <> 0 THEN
+	THIS^.future := creator.create_future(future_name);
+	_future.persistent_future := FALSE;
+END_IF
+create_future := _future;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="current_state" Id="{9bdc45ea-e038-402f-9e8e-3b1c363b70b4}">
+      <Declaration><![CDATA[{attribute 'OPC.UA.DA.Property' := '1'}
+{attribute 'monitoring' := 'call'}
+{attribute 'OPC.UA.DA.Description' := 'Current state of this executor object.'}
+PROPERTY current_state : E_FutureExecutionState // Get current job state]]></Declaration>
+      <Get Name="Get" Id="{6d7ef6bc-7830-4957-91e4-53fd4bd8f4ba}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[current_state := _state;	
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="current_timestamp" Id="{74095410-9ee5-43ed-9c18-81832c61b8b6}">
+      <Declaration><![CDATA[PROPERTY current_timestamp : POINTER TO T_FILETIME64]]></Declaration>
+      <Get Name="Get" Id="{7fe2ad0d-e85a-4a95-857c-47623a2cd762}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[current_timestamp := _current_timestamp;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c896aa9f-824e-471d-9ccb-0ebb207bc01b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_current_timestamp := current_timestamp;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="done" Id="{4120264c-9741-4f55-a3ec-37db4b2fdd1d}">
+      <Declaration><![CDATA[PROPERTY done : BOOL // Present true if process be finished.]]></Declaration>
+      <Get Name="Get" Id="{adfb9284-a38c-48f0-99cc-b8f7d36d7c03}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[done := _done;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="error_reset" Id="{2f58a820-9692-4e5a-84bc-d2abdb71e852}">
+      <Declaration><![CDATA[METHOD error_reset : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _future <> 0 THEN
+	IF _future.error_reset() THEN
+		error_reset := TRUE;
+		get_job_info('ERROR_RESET', _job_event_observable, FALSE);
+	ELSE
+		error_reset := FALSE;
+	END_IF
+	_error_id := _future.nErrorID;
+ELSE
+	_error_id := 0;
+	error_reset := TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="execute" Id="{12a00ca6-fc73-4fe5-8b5c-2a7a9dcde6d1}">
+      <Declaration><![CDATA[METHOD execute : BOOL // Execute future process and return TRUE if all task are finished.
+VAR_INST
+	_state_mem :E_FutureExecutionState;
+	delay : TIME := T#3S;
+	sleep : TON;
+	await : BOOL;
+	_logging : BOOL;
+END_VAR
+VAR
+	_executor : REFERENCE TO FB_Executor;
+	start_all_children : BOOL;
+	exe: INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _future = 0 THEN
+	execute := TRUE;
+	RETURN;
+ELSE
+	execute := FALSE;
+END_IF
+
+IF _passive_abort THEN
+	_state := E_FutureExecutionState.abort;
+	//IF _error_id = 0 THEN
+	//	_error_id := E_ErrorId.PASSIVE_ABORT;
+	//END_IF
+	_passive_abort := FALSE;
+END_IF
+
+IF _quit THEN
+	_state := E_FutureExecutionState.quit;
+END_IF
+_quit := FALSE;
+
+CASE _state OF
+	E_FutureExecutionState.idle:
+		IF _future.state = E_FutureExecutionState.idle OR 
+			_future.state = E_FutureExecutionState.finish THEN
+			IF init() THEN
+				_state := E_FutureExecutionState.init;
+			END_IF
+		END_IF
+	E_FutureExecutionState.init:
+		IF _future.init() THEN
+			IF _future.nErrorID = 0 THEN
+				_state := E_FutureExecutionState.wait_for_process;
+			ELSE
+				_last_state := E_FutureExecutionState.init;
+				_error_id := _future.nErrorID;
+				_state := E_FutureExecutionState.abort;
+			END_IF
+		END_IF
+	E_FutureExecutionState.wait_for_process: 
+		IF _start THEN
+			IF _previous_job <> 0 AND_THEN _future <> 0 AND_THEN _previous_job.future = _future THEN
+				IF _future.init() THEN
+					_state := E_FutureExecutionState.process;
+					_start := FALSE;					
+				END_IF
+			ELSE
+				_state := E_FutureExecutionState.process;
+				_start := FALSE;
+			END_IF
+		END_IF
+	E_FutureExecutionState.process: 
+		IF _future.execute() THEN
+			IF _future.nErrorID = 0 THEN
+				_state := E_FutureExecutionState.quit;
+				_done := TRUE;
+			ELSE
+				_error_id := _future.nErrorID;
+				_state := E_FutureExecutionState.abort;
+			END_IF
+		END_IF
+	E_FutureExecutionState.abort:
+		IF _aborting THEN
+			await := _future.abort();
+			_resume := FALSE;
+			IF _upstream_aborting AND _parent_job <> 0 THEN
+				_parent_job.abort();
+			END_IF
+			IF await THEN
+				_aborting := FALSE;
+			END_IF
+		ELSIF _resume THEN
+			_state := _last_state;
+			IF _error_id = E_ErrorId.PASSIVE_ABORT THEN
+				_error_id := 0;
+			END_IF
+			_resume := FALSE;
+		END_IF
+	E_FutureExecutionState.quit:
+		IF _future.quit() THEN
+			IF _future.nErrorID = 0 THEN
+				_state := E_FutureExecutionState.finish;
+			ELSE
+				_error_id := _future.nErrorID;
+				_state := E_FutureExecutionState.abort;
+			END_IF
+			_quitting := FALSE;
+		END_IF
+	E_FutureExecutionState.finish:
+		IF NOT _logging THEN
+			execute := TRUE;
+		END_IF
+END_CASE
+
+IF _state <> _state_mem THEN
+	_last_state := _state_mem;
+
+	IF _state = E_FutureExecutionState.init OR
+		_state = E_FutureExecutionState.process OR
+		_state = E_FutureExecutionState.quit THEN
+		_error_id := 0;
+	END_IF
+
+	IF _state = E_FutureExecutionState.abort THEN
+		_aborting := TRUE;
+	END_IF
+	
+	IF _state = E_FutureExecutionState.quit THEN
+		sleep(IN := FALSE);
+		_quitting := TRUE;
+	END_IF
+
+	_logging := TRUE;
+
+END_IF
+
+_transition := _state <> _state_mem;
+_state_mem := _state;
+
+// Transition logging
+IF _logging THEN
+	IF get_job_info('TRANSITION', _job_event_observable,FALSE) THEN
+		_logging := FALSE;
+	END_IF
+END_IF
+
+
+
+IF _future <> 0 THEN
+	_future.state := _state;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="future" Id="{a5f34e34-fd86-442a-a2b3-dcfdacffba84}">
+      <Declaration><![CDATA[PROPERTY future : I_Future // Set future instance direct.]]></Declaration>
+      <Get Name="Get" Id="{ea3475fd-42f3-40d5-80b9-94fefa3dce7f}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[future := _future;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1c600ba1-a530-4be6-883c-03a190a9123a}">
+        <Declaration><![CDATA[VAR
+	_eval_executor : I_Job;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_future := future;
+_future.state := _state;
+_future.executor := THIS^;
+//_future.persistent_future := TRUE;
+IF NOT __QUERYINTERFACE(_future, _interface_container) THEN
+	_interface_container := 0;
+END_IF
+
+_future.persistent_future := TRUE;
+
+// Redefine parent job pointer to the container members which has been set as the new future.
+IF _interface_container <> 0 THEN
+	REPEAT
+		_eval_executor := _interface_container.each_executor;
+		IF _eval_executor <> 0 THEN
+			// Set persistent future flag when redefine new parent due to make bound of namespace.
+			//IF _eval_executor.parent_executor = 0 AND _eval_executor.children <> 0 THEN
+			//	_eval_executor.future.persistent_future := TRUE;
+			//END_IF
+			// Set new parent for each childrens
+			_eval_executor.parent_executor := THIS^;
+		END_IF
+	UNTIL
+		_eval_executor = 0
+	END_REPEAT
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="future_creator" Id="{4ef3d23b-70fc-42e7-92d1-5df42cf5ccf9}">
+      <Declaration><![CDATA[PROPERTY future_creator : I_TaskCreator // Set creator instance.]]></Declaration>
+      <Set Name="Set" Id="{73c997cd-b03a-40d8-97e1-94183b40cdc9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_future_creator := future_creator;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="get_job_info" Id="{776089a7-403b-4f19-b673-2cf0c4b27716}">
+      <Declaration><![CDATA[METHOD get_job_info : BOOL
+VAR_INPUT
+	title		: T_MaxString; // Observable object title
+	observable 	: I_Observable; // Observable object
+	recursive	: BOOL := FALSE; // Set observable to child job recursively or not
+END_VAR
+VAR
+	_info : I_JobInfo;
+	_child_job : I_Job;
+	_cmp : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF observable = 0  OR NOT __QUERYINTERFACE(observable, _info) THEN
+	get_job_info := TRUE;
+	RETURN;
+END_IF
+
+_info.title := title;
+_info.job := THIS^;
+_info.last_state := _last_state;
+_info.new_state := _state;
+IF _current_timestamp <> 0 THEN
+	_info.record_time := _current_timestamp^;
+ELSE
+	_info.record_time := F_GetSystemTime();
+END_IF
+
+observable.notify_observers();
+
+IF recursive THEN
+	_cmp := TRUE;
+	IF THIS^.children <> 0 THEN
+		REPEAT
+			_child_job := THIS^.children.each_executor;
+			IF _child_job <> 0 THEN
+				IF NOT _child_job.get_job_info(title, observable, recursive) THEN
+					_cmp := FALSE;
+				END_IF
+			END_IF
+		UNTIL
+			_child_job = 0
+		END_REPEAT
+	END_IF
+	
+	get_job_info := _cmp;
+ELSE
+	get_job_info := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="id" Id="{cfcf1743-1715-4af2-a0a4-cd9f1ebd1808}">
+      <Declaration><![CDATA[PROPERTY id : T_MaxString // Get job id.
+]]></Declaration>
+      <Get Name="Get" Id="{5863c94c-93ce-4810-8c6f-f18910d5e32a}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[id := _id;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="init" Id="{204f5707-ec01-4438-ae9f-8cbe74e0162c}">
+      <Declaration><![CDATA[METHOD init : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+VAR
+	_eval_executor : I_Job;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_done := FALSE;
+_passive_abort := FALSE;
+_start := FALSE;
+_state := E_FutureExecutionState.idle;
+_error_id := 0;
+
+_eval_executor := _parent_job;
+_id := CONCAT('/', TO_STRING(_serial));
+REPEAT
+	IF _eval_executor <> 0 THEN
+		_id := CONCAT(TO_STRING(_eval_executor.serial), _id);
+		_id := CONCAT('/',_id);
+		_eval_executor := _eval_executor.parent_executor;
+	END_IF
+UNTIL
+	_eval_executor = 0
+END_REPEAT
+
+
+IF _parent_job = 0 THEN
+	_namespace := _id;
+ELSIF _future <> 0 AND_THEN _future.persistent_future AND_THEN NOT _parent_job.future.persistent_future THEN
+	_namespace := _id;
+ELSE
+	_namespace := _parent_job.namespace;
+END_IF
+
+INIT := TRUE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="job_event_observable" Id="{7070112e-2fb6-433d-85f5-f36a183c0a1e}">
+      <Declaration><![CDATA[PROPERTY job_event_observable : I_Observable]]></Declaration>
+      <Get Name="Get" Id="{150bf335-b5f5-4890-8f09-a0bd37e70e48}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[job_event_observable := _job_event_observable;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{4cb4a4bf-e492-4795-8469-65c6601636a4}">
+        <Declaration><![CDATA[VAR
+	executor : I_Job;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_job_event_observable := job_event_observable;
+IF THIS^.children <> 0 THEN
+	REPEAT
+		executor := THIS^.children.each_executor;
+		IF executor <> 0 THEN
+			executor.job_event_observable := job_event_observable;
+		END_IF
+	UNTIL
+		executor = 0
+	END_REPEAT
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="last_state" Id="{02f59fbb-3554-446d-b45f-63f705bf0087}">
+      <Declaration><![CDATA[PROPERTY last_state : E_FutureExecutionState]]></Declaration>
+      <Get Name="Get" Id="{68fa5637-46a2-41df-8fb4-fd6bb35fe1de}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[last_state := _last_state;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="namespace" Id="{e687b51c-1eb3-4c29-99ba-5eb9a8c6c8be}">
+      <Declaration><![CDATA[PROPERTY namespace : T_MaxString
+]]></Declaration>
+      <Get Name="Get" Id="{0b0730e5-e410-46b6-9595-fd47b24aa11a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[namespace := _namespace;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="nErrorID" Id="{b8e1cf4d-b2aa-4996-8037-fe94c831ada6}">
+      <Declaration><![CDATA[PROPERTY nErrorID : HRESULT // Present error code when each process,init(), execute(), quit() are finished. '0' represent normal condition without any errors.
+]]></Declaration>
+      <Get Name="Get" Id="{279bd7d5-87e3-414a-919d-b55c6d45fe5f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nErrorID := _error_id;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="next_job" Id="{a300d623-5187-4908-9ad7-171d81566cfe}">
+      <Declaration><![CDATA[PROPERTY next_job : I_Job]]></Declaration>
+      <Get Name="Get" Id="{d4b40274-ad2a-43d0-b710-4740c5af6d86}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[next_job := _next_job;
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ac48e3e6-425c-4728-a6d6-50eab5c72bd1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_next_job := next_job;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="parent_executor" Id="{b57cb923-713c-4924-8cfc-cae55fa1c52b}">
+      <Declaration><![CDATA[PROPERTY parent_executor : I_Job]]></Declaration>
+      <Get Name="Get" Id="{e78d9b69-dec8-4381-b9cd-280132473f08}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[parent_executor := _parent_job;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{577406ef-8da9-4b14-a0b7-e722091103f8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+VAR
+	_parent_path : T_MaxString;
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_parent_job := parent_executor;
+THIS^.current_timestamp := _parent_job.current_timestamp;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="persistent_job" Id="{b89a0e73-a4d3-4c48-90ea-4677cb6b1e21}">
+      <Declaration><![CDATA[PROPERTY persistent_job : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4e0a202e-d946-4c95-8d14-6311de03e544}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[persistent_job := _persistent_job;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{221196e4-1427-4553-95a0-98128bf59f13}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_persistent_job := persistent_job;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="previous_job" Id="{ad924123-bbe5-4b38-9b05-37bddd8d0a87}">
+      <Declaration><![CDATA[PROPERTY previous_job : I_Job]]></Declaration>
+      <Get Name="Get" Id="{a4309dca-ad9c-40b9-98a5-c4fa0626577a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[previous_job := _previous_job;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2925b7af-f941-4943-b522-10d8b3355008}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_previous_job := previous_job;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="quit" Id="{a3ed0ceb-2877-462b-84db-f716a8c9598e}">
+      <Declaration><![CDATA[METHOD quit : BOOL // Return TRUE if finish.
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _state = E_FutureExecutionState.init OR
+   _state = E_FutureExecutionState.process OR
+   _state = E_FutureExecutionState.quit THEN
+	_quit := TRUE;	
+END_IF
+
+IF 	_quit AND _state = E_FutureExecutionState.quit THEN
+	quit := NOT _quitting;
+ELSE
+	quit := TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="ready" Id="{a76eb28b-8e38-458e-b69a-c73f1b377610}">
+      <Declaration><![CDATA[PROPERTY ready : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b15bc61f-5bad-464a-9e63-5e877e3aa3c7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ready := _state = E_FutureExecutionState.wait_for_process;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="reset" Id="{32d5d6a5-da71-471a-b4b9-590194585265}">
+      <Declaration><![CDATA[METHOD reset : BOOL // Return TRUE if finish.
+VAR_INPUT
+	deep : BOOL := FALSE;
+END_VAR
+VAR
+	_reset_children :BOOL := FALSE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Waiting finish process and remove jobs from container items.
+IF THIS^.busy THEN
+	THIS^.abort();
+ELSIF _interface_container <> 0 AND _future <> 0 AND_THEN 
+	( NOT _future.persistent_future OR deep) THEN
+	_reset_children := _interface_container.reset(deep);
+ELSE
+	_reset_children := TRUE;
+END_IF
+
+// Remove my future.
+IF _reset_children AND _future <> 0 THEN
+	IF  NOT _future.persistent_future OR deep THEN
+		IF _future_creator <> 0 THEN
+			_future := _future_creator.destroy_future(_future);
+		ELSIF _future.init() THEN
+			_future.state := E_FutureExecutionState.idle;
+			_future := 0;
+		END_IF
+		IF _future = 0 THEN
+			_interface_container := 0;
+			reset := TRUE;
+		END_IF
+	ELSE
+		IF _future.init() THEN
+			reset := TRUE;
+		END_IF
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="resume" Id="{e3dc2ca8-54b7-423a-8cca-8c4b62e978bb}">
+      <Declaration><![CDATA[METHOD resume : BOOL
+VAR_INST
+	_executor : REFERENCE TO FB_Executor;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_resume := TRUE;
+IF _interface_container <> 0 THEN
+	IF NOT _interface_container.resume() THEN
+		_resume := FALSE;
+	END_IF
+END_IF
+IF NOT _resume THEN
+	_future.execute();
+END_IF
+resume := _resume;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="serial" Id="{3f014173-47fb-4cfc-8b23-85b1ddd1858d}">
+      <Declaration><![CDATA[PROPERTY serial : ULINT]]></Declaration>
+      <Get Name="Get" Id="{bf36e484-6df4-4358-9c8e-43248e08d178}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[serial := _serial;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{cbe2c12c-b477-4164-bed2-18d29b604276}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_serial := serial;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="start" Id="{fb7671b6-91ac-4f18-8e41-b81f64039055}">
+      <Declaration><![CDATA[METHOD start : BOOL
+VAR
+	_start_children :BOOL := FALSE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Start my future.
+_start := _state = E_FutureExecutionState.wait_for_process;
+start := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="transition" Id="{889283d8-6419-403c-b7dc-ec3131124687}">
+      <Declaration><![CDATA[PROPERTY transition : BOOL]]></Declaration>
+      <Get Name="Get" Id="{26368908-148c-4d39-aba1-a9c3c69e33b4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[transition := _transition;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="upstream_aborting" Id="{005019ae-b53c-48e8-93f8-286c00c2c383}">
+      <Declaration><![CDATA[PROPERTY upstream_aborting : BOOL]]></Declaration>
+      <Get Name="Get" Id="{63c291b8-3195-41b6-aa40-ef7a1188cf41}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[upstream_aborting := _upstream_aborting;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{591710e5-8526-4fe9-bae8-a2b8d28c07cb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[_upstream_aborting := upstream_aborting;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+  </POU>
+</TcPlcObject>

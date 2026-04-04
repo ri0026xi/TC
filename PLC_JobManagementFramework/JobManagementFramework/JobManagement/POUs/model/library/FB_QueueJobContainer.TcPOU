@@ -1,0 +1,297 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FB_QueueJobContainer" Id="{01d51c34-d9d2-4596-9c6a-f2560502cf89}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_QueueJobContainer EXTENDS FB_AbstructContainer IMPLEMENTS I_SerialContainer
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	_current_executing_job : I_Job;
+	nWriteIndex: 	UINT := 1;
+	nReadIndex: 	UINT := 1;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="_append_job" Id="{8f105f35-ff05-4a73-8bbf-cd1b6276e3e6}">
+      <Declaration><![CDATA[METHOD PROTECTED _append_job : BOOL
+VAR_INPUT
+	executor	: I_Job;
+END_VAR
+VAR_INST
+	carry_flag	: BOOL;
+	last_index	: UINT := 1;
+END_VAR
+VAR
+	_p_executor : POINTER TO FB_Executor;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Set buffer index
+IF executor <> 0 AND _num_of_jobs < ParamFuturesLib.MAX_TASK_NUM THEN
+	IF _executors[nWriteIndex] <> 0 AND_THEN NOT _executors[nWriteIndex].persistent_job AND __QUERYPOINTER(_executors[nWriteIndex], _p_executor) THEN
+		__DELETE(_p_executor);
+	END_IF
+	// Spawn new task with specified feature
+	_executors[nWriteIndex] := executor;
+
+	// Get parent tssk id
+	IF _executor <> 0 THEN
+		_executors[nWriteIndex].job_event_observable := _executor.job_event_observable;
+		_executors[nWriteIndex].parent_executor := _executor;
+		_executors[nWriteIndex].upstream_aborting := _executor.upstream_aborting;
+	END_IF
+
+	// Add reference to next, previous jobs 
+	IF _executors[last_index] <> 0 THEN
+		_executors[last_index].next_job := _executors[nWriteIndex];
+		_executors[nWriteIndex].previous_job := _executors[last_index];
+	END_IF
+
+	// Set my task ID
+	
+	IF _executors[nWriteIndex].previous_job <> 0 THEN
+		_executors[nWriteIndex].serial := _executors[nWriteIndex].previous_job.serial + 1;
+	ELSE
+		_executors[nWriteIndex].serial := 1;
+	END_IF
+
+	last_index := nWriteIndex;
+
+
+	// Prepare index for next added job
+	nWriteIndex := _get_next_index(nWriteIndex);
+	
+	// Clear previous job pointer of prepared next job.
+	IF _executors[nWriteIndex] <> 0 THEN
+		_executors[nWriteIndex].previous_job := 0;
+	END_IF
+
+	// calculate number of jobs by queue address
+	IF nWriteIndex = nReadIndex AND _num_of_jobs = ParamFuturesLib.MAX_TASK_NUM - 1 THEN 
+		carry_flag := TRUE;
+	END_IF
+
+	IF carry_flag THEN
+		_num_of_jobs := ParamFuturesLib.MAX_TASK_NUM;
+		carry_flag := FALSE;
+	ELSIF nWriteIndex >= nReadIndex THEN
+		_num_of_jobs := nWriteIndex - nReadIndex;
+	ELSE
+		_num_of_jobs := ParamFuturesLib.MAX_TASK_NUM - nReadIndex + nWriteIndex;
+	END_IF
+	executor.init();
+
+
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_get_next_index" Id="{75a74964-6e20-4da5-815d-c30de191967b}">
+      <Declaration><![CDATA[METHOD _get_next_index : UINT
+VAR_INPUT
+	cuurent_index : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_get_next_index := cuurent_index + 1;
+IF _get_next_index > ParamFuturesLib.MAX_TASK_NUM THEN
+	_get_next_index := 1;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="_index_generator_" Id="{9ef6efa5-8390-4d8b-8176-a5198402cdfe}">
+      <Declaration><![CDATA[(* This is the generator that iteratively generates references to FB_executor instances*)
+METHOD _index_generator_ : UINT;
+VAR_INST
+	_init	: BOOL := FALSE;
+	_index :UINT;
+	_current_order_number : DINT;
+	_carry_flag : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT _init THEN
+	_carry_flag := FALSE;
+	_index := nReadIndex;
+	_init := TRUE;
+END_IF
+
+// calculate order number of executing futures by queue address
+IF _num_of_jobs = 0 THEN
+	_current_order_number := 0;
+ELSIF _carry_flag THEN // 
+	_current_order_number := ParamFuturesLib.MAX_TASK_NUM;
+ELSIF nWriteIndex > nReadIndex THEN // Normal case
+	_current_order_number := _index - nReadIndex + 1;
+ELSE // 
+	_current_order_number := _index - nReadIndex + 1;
+	IF _current_order_number < 0 THEN
+		_current_order_number := _current_order_number + ParamFuturesLib.MAX_TASK_NUM;
+	END_IF
+	IF _current_order_number = ParamFuturesLib.MAX_TASK_NUM - 1 THEN
+		_carry_flag := TRUE;
+	END_IF
+END_IF
+
+
+_index_generator_ := _index;
+
+//Set buffer index
+IF _num_of_jobs = 0 OR _num_of_jobs < _current_order_number THEN
+	_init := FALSE;
+END_IF
+
+IF NOT _init THEN
+	_index_generator_ := 0;
+END_IF
+
+IF _init THEN
+	_index := _index + 1;
+	IF _index > ParamFuturesLib.MAX_TASK_NUM THEN
+		_index := 1;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="abort" Id="{dff13b45-18d6-46c3-b266-e17169a248ba}">
+      <Declaration><![CDATA[METHOD abort : BOOL // Return TRUE if finish.
+VAR_INST
+	await : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF _current_executing_job <> 0 THEN
+	await := _current_executing_job.abort();
+	abort := await AND NOT _current_executing_job.busy;
+ELSE
+	abort := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="current_job" Id="{af12a06e-7153-4412-a5db-cc64a8d9b4ec}">
+      <Declaration><![CDATA[PROPERTY current_job : I_Job]]></Declaration>
+      <Get Name="Get" Id="{117923d6-1783-4ce2-81dc-afaa9df16b1e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[current_job := _current_executing_job;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="dequeue" Id="{042fad97-faf7-4c78-94a6-8caae6e0dedd}">
+      <Declaration><![CDATA[METHOD dequeue : I_Job;
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Set buffer index
+IF _num_of_jobs > 0 THEN
+	dequeue := _executors[nReadIndex];
+	nReadIndex := nReadIndex + 1;
+	IF nReadIndex > ParamFuturesLib.MAX_TASK_NUM THEN
+		nReadIndex := 1;
+	END_IF
+	// calculate order number of executing futures by queue address
+	IF nWriteIndex >= nReadIndex THEN
+		_num_of_jobs := nWriteIndex - nReadIndex;
+	ELSE
+		_num_of_jobs := ParamFuturesLib.MAX_TASK_NUM - nReadIndex + nWriteIndex;
+	END_IF
+ELSE
+	dequeue := 0;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="execute" Id="{08489d90-f655-4964-9e80-20dd5ed12d14}">
+      <Declaration><![CDATA[METHOD execute : BOOL // Return TRUE if finish.
+VAR
+	_head : BOOL;
+	_execution_complete :BOOL; 
+	_future_id :UINT;
+	complete_last_proess :BOOL := FALSE;
+	i: UINT;
+	_finish_delay : TON;
+	_executor : I_Job;
+
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[complete_last_proess := FALSE;
+
+//IF _total_futures = 0 THEN
+//	RETURN;
+//END_IF
+
+_head := TRUE;
+REPEAT
+	// キューインされたFB_executorインスタンスを順に取り出すイテレータ。_endがTRUEになれば全て取り出し完了。_headは先頭のみtrueになる。
+	i := THIS^._index_generator_();
+	
+	IF i > 0 THEN
+		_executor := _executors[i];
+		_execution_complete := _executor.execute();
+		
+		CASE _executor.current_state OF
+			E_FutureExecutionState.idle:
+				_executor.init();
+			E_FutureExecutionState.wait_for_process:
+				IF _executor.ready AND (complete_last_proess OR _head) AND SUPER^._auto_start THEN
+					_executor.start();
+					_current_executing_job := _executor;
+				END_IF
+		END_CASE
+		
+		complete_last_proess := _executor.done;	
+
+		_error_id := _executor.nErrorID;
+		
+		IF _execution_complete THEN
+			IF _head THEN
+				// キューの先頭がfinish状態になれば取り出してキューから削除する
+				//IF _executor.reset(FALSE) THEN
+					THIS^.dequeue();
+				//END_IF
+			END_IF		
+		END_IF
+	ELSIF  _execution_complete THEN
+		execute := NOT _continuous_mode;
+	END_IF
+	_head := FALSE;
+UNTIL
+	i = 0
+END_REPEAT;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="init" Id="{e2e928e1-a3fb-4663-8042-bd87f35fc43e}">
+      <Declaration><![CDATA[METHOD init : BOOL // Return TRUE if finish.
+VAR
+	_executor : I_Job;
+	_init_done : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_init_done := TRUE;
+REPEAT
+	_executor := each_executor;
+	IF _executor <> 0 THEN
+		IF NOT _executor.init() THEN
+			_init_done := FALSE;
+		END_IF
+	END_IF
+UNTIL
+	_executor = 0
+END_REPEAT
+
+_current_executing_job := 0;
+_error_id := 0;
+init := _init_done;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>
