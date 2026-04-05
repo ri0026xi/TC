@@ -1,0 +1,450 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FB_ConveyorControl" Id="{cf763853-d43f-4fab-9c3c-27f1f0ef85b9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ConveyorControl
+VAR_INPUT
+	bS1_Entry        : BOOL;
+	bS2_Mid          : BOOL;
+	bS3_Exit         : BOOL;
+	bEStop           : BOOL;
+	bStart           : BOOL;
+	bStop            : BOOL;
+	bReset           : BOOL;
+	fSpeedSetpoint   : LREAL := 1.0;
+	eMode            : E_ConveyorMode;
+	// Phase 2: E-Stop
+	bEStopCmd        : BOOL;        // Software E-Stop from HMI
+	bEStopConfirmed  : BOOL;        // E-Stop acknowledged
+	// Phase 3: Direction
+	bDirectionCmd    : BOOL := TRUE; // TRUE=FWD, FALSE=REV
+	// Phase 4: Manual
+	bStopperManualCmd : BOOL;
+	bJog             : BOOL;        // Jog in current direction (held signal)
+END_VAR
+VAR_OUTPUT
+	eStatus          : E_ConveyorStatus;
+	fBeltSpeed       : LREAL;
+	fMotorLoad       : LREAL;
+	nTodayCount      : UDINT;
+	bStopperActive   : BOOL;
+	bDirectionFwd    : BOOL := TRUE; // Current direction
+	bEStopActive     : BOOL;         // E-Stop condition active (latched)
+	aAlarms          : ARRAY[0..19] OF ST_AlarmEntry;
+	nAlarmWriteIndex : UINT;
+END_VAR
+VAR
+	_axis            : REFERENCE TO AXIS_REF;
+	_bInitDone       : BOOL;
+	_nState          : UINT;
+
+	// MC function blocks
+	_mcPower         : MC_Power;
+	_mcMoveVelo      : MC_MoveVelocity;
+	_mcStop          : MC_Stop;
+	_mcReset         : MC_Reset;
+
+	// Edge detection — buttons
+	_rtStart         : R_TRIG;
+	_rtStop          : R_TRIG;
+	_rtReset         : R_TRIG;
+	_rtS3Exit        : R_TRIG;
+
+
+	// Stopper
+	_tonStopperDelay : TON;
+	_bStopperRequest : BOOL;
+
+	// Alarm
+	_nAlarmIdx       : UINT;
+
+	// Motor load simulation
+	_fLoadSim        : LREAL;
+
+	// Phase 1: Timestamp
+	_fbLocalTime     : FB_LocalSystemTime;
+
+	// Phase 2: E-Stop
+	_bEStopEffective : BOOL;
+	_bEStopTriggered : BOOL;  // Latched: E-Stop caused this error state
+	_bResetRequested : BOOL;  // User pressed Reset in state 100
+
+	// Phase 3: Direction
+	_bDirectionFwd   : BOOL := TRUE;
+
+	// Phase 4: Manual
+	_fManualSpeedMax : LREAL := 0.5;
+	_fJogSpeed       : LREAL := 0.3;
+	_eModePrev       : E_ConveyorMode;
+	_fSpeedPrev      : LREAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Timestamp source
+_fbLocalTime(bEnable := TRUE);
+
+// Edge detection — buttons
+_rtStart(CLK := bStart);
+_rtStop(CLK := bStop);
+_rtReset(CLK := bReset);
+_rtS3Exit(CLK := bS3_Exit);
+
+// Stopper events logged only in state change, not as alarms (too frequent)
+
+// Mode change logging
+IF eMode <> _eModePrev THEN
+	IF eMode = E_ConveyorMode.Auto THEN
+		AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'Mode changed to AUTO');
+	ELSE
+		AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'Mode changed to MANUAL');
+	END_IF
+END_IF
+
+// Mode change while running -> force stop
+IF eMode <> _eModePrev AND (_nState = 20 OR _nState = 40) THEN
+	_nState := 30;
+	AddAlarm(eSeverity := E_AlarmSeverity.WARN, sMessage := 'Mode change while running - stopping');
+END_IF
+_eModePrev := eMode;
+
+// Effective E-Stop = hardware OR software
+_bEStopEffective := bEStop OR bEStopCmd;
+
+// E-Stop check (any state)
+IF _bEStopEffective AND _nState <> 100 THEN
+	_mcPower.Enable := FALSE;
+	_nState := 100;
+	_bEStopTriggered := TRUE;
+	eStatus := E_ConveyorStatus.EStop;
+	IF bEStopCmd THEN
+		AddAlarm(eSeverity := E_AlarmSeverity.ERROR, sMessage := 'E-Stop activated (HMI)');
+	ELSE
+		AddAlarm(eSeverity := E_AlarmSeverity.ERROR, sMessage := 'E-Stop activated (hardware)');
+	END_IF
+END_IF
+
+// Direction output
+bDirectionFwd := _bDirectionFwd;
+
+// State machine
+CASE _nState OF
+
+	0: // STOPPED
+		eStatus := E_ConveyorStatus.Stopped;
+		_mcPower.Enable := FALSE;
+		_mcMoveVelo.Execute := FALSE;
+		_mcStop.Execute := FALSE;
+
+		// Update direction while stopped (no state transition needed)
+		_bDirectionFwd := bDirectionCmd;
+
+		IF _rtStart.Q AND NOT _bEStopEffective THEN
+			_nState := 10;
+			AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'System starting');
+		END_IF
+
+		// Jog in manual mode (direction from bDirectionCmd)
+		IF eMode = E_ConveyorMode.Manual AND bJog AND NOT _bEStopEffective THEN
+			_nState := 40;
+			AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'Jog started');
+		END_IF
+
+	10: // STARTING
+		eStatus := E_ConveyorStatus.Starting;
+		// Auto-reset axis errors before powering
+		IF NOT _mcPower.Status THEN
+			_mcReset.Execute := TRUE;
+		END_IF
+		IF _mcReset.Done THEN
+			_mcReset.Execute := FALSE;
+		END_IF
+
+		_mcPower.Enable := TRUE;
+		_mcPower.Enable_Positive := TRUE;
+		_mcPower.Enable_Negative := TRUE;
+
+		IF _mcPower.Status THEN
+			_mcMoveVelo.Execute := FALSE;
+			_nState := 15;
+		END_IF
+
+		IF _mcPower.Error THEN
+			_nState := 100;
+			eStatus := E_ConveyorStatus.Error;
+			AddAlarm(eSeverity := E_AlarmSeverity.ERROR, sMessage := 'MC_Power error');
+		END_IF
+
+	15: // VELOCITY COMMAND (direction-aware)
+		_mcMoveVelo.Velocity := ABS(fSpeedSetpoint) * 360.0;
+		IF _bDirectionFwd THEN
+			_mcMoveVelo.Direction := MC_Positive_Direction;
+		ELSE
+			_mcMoveVelo.Direction := MC_Negative_Direction;
+		END_IF
+		_mcMoveVelo.Execute := TRUE;
+
+		IF _mcMoveVelo.InVelocity THEN
+			_nState := 20;
+			AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'System running');
+		END_IF
+
+		IF _mcMoveVelo.Error THEN
+			_nState := 100;
+			eStatus := E_ConveyorStatus.Error;
+			AddAlarm(eSeverity := E_AlarmSeverity.ERROR, sMessage := 'MC_MoveVelocity error');
+		END_IF
+
+	20: // RUNNING
+		eStatus := E_ConveyorStatus.Running;
+
+		// Direction change while running -> REVERSING
+		IF bDirectionCmd <> _bDirectionFwd THEN
+			_nState := 25;
+			AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'Direction change requested');
+		// Speed change detection
+		ELSIF eMode = E_ConveyorMode.Manual THEN
+			// Manual: direct speed, clamped
+			IF ABS(fSpeedSetpoint - _fSpeedPrev) > 0.01 THEN
+				_mcMoveVelo.Velocity := MIN(ABS(fSpeedSetpoint), _fManualSpeedMax) * 360.0;
+				_mcMoveVelo.Execute := FALSE;
+			ELSE
+				_mcMoveVelo.Execute := TRUE;
+			END_IF
+		ELSE
+			// Auto: re-issue via state 15
+			IF ABS(ABS(_mcMoveVelo.Velocity) - ABS(fSpeedSetpoint) * 360.0) > 0.01 THEN
+				_mcMoveVelo.Execute := FALSE;
+				_nState := 15;
+			END_IF
+		END_IF
+		_fSpeedPrev := fSpeedSetpoint;
+
+		// Belt speed from axis (signed: negative when REV)
+		IF __ISVALIDREF(_axis) THEN
+			fBeltSpeed := _axis.NcToPlc.ActVelo / 360.0;
+		END_IF
+
+		// Motor load simulation
+		_fLoadSim := 40.0 + (ABS(fSpeedSetpoint) / 2.0) * 40.0;
+		IF bS1_Entry OR bS2_Mid OR bS3_Exit THEN
+			_fLoadSim := _fLoadSim + 10.0;
+		END_IF
+		fMotorLoad := _fLoadSim;
+
+		// Piece counting on S3 rising edge
+		IF _rtS3Exit.Q THEN
+			nTodayCount := nTodayCount + 1;
+		END_IF
+
+		// Stopper logic
+		IF eMode = E_ConveyorMode.Auto THEN
+			_bStopperRequest := bS2_Mid;
+		ELSE
+			_bStopperRequest := bStopperManualCmd;
+		END_IF
+
+		IF _rtStop.Q THEN
+			_nState := 30;
+			AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'System stopping');
+		END_IF
+
+	25: // REVERSING - decelerate then reverse
+		eStatus := E_ConveyorStatus.Running;
+		_mcMoveVelo.Execute := FALSE;
+		_mcStop.Execute := TRUE;
+
+		IF _mcStop.Done THEN
+			_mcStop.Execute := FALSE;
+			_bDirectionFwd := bDirectionCmd;
+			AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := SEL(_bDirectionFwd, 'Direction: REV', 'Direction: FWD'));
+			_nState := 15;
+		END_IF
+
+		IF _mcStop.Error THEN
+			_nState := 100;
+			eStatus := E_ConveyorStatus.Error;
+			AddAlarm(eSeverity := E_AlarmSeverity.ERROR, sMessage := 'MC_Stop error during reversal');
+		END_IF
+
+	30: // STOPPING
+		eStatus := E_ConveyorStatus.Stopping;
+		_mcMoveVelo.Execute := FALSE;
+		_mcStop.Execute := TRUE;
+
+		IF _mcStop.Done THEN
+			_mcStop.Execute := FALSE;
+			_mcPower.Enable := FALSE;
+			fBeltSpeed := 0.0;
+			_nState := 0;
+			AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'System stopped');
+		END_IF
+
+		IF _mcStop.Error THEN
+			_nState := 100;
+			eStatus := E_ConveyorStatus.Error;
+			AddAlarm(eSeverity := E_AlarmSeverity.ERROR, sMessage := 'MC_Stop error');
+		END_IF
+
+	40: // JOGGING (manual mode only, direction from _bDirectionFwd)
+		eStatus := E_ConveyorStatus.Jogging;
+
+		IF bJog AND eMode = E_ConveyorMode.Manual THEN
+			// Auto-reset axis errors before powering
+			IF NOT _mcPower.Status THEN
+				_mcReset.Execute := TRUE;
+			END_IF
+			IF _mcReset.Done THEN
+				_mcReset.Execute := FALSE;
+			END_IF
+
+			_mcPower.Enable := TRUE;
+			_mcPower.Enable_Positive := TRUE;
+			_mcPower.Enable_Negative := TRUE;
+
+			IF _mcPower.Status THEN
+				_mcMoveVelo.Velocity := _fJogSpeed * 360.0;
+				IF _bDirectionFwd THEN
+					_mcMoveVelo.Direction := MC_Positive_Direction;
+				ELSE
+					_mcMoveVelo.Direction := MC_Negative_Direction;
+				END_IF
+				_mcMoveVelo.Execute := TRUE;
+			END_IF
+
+			// Belt speed (signed)
+			IF __ISVALIDREF(_axis) THEN
+				fBeltSpeed := _axis.NcToPlc.ActVelo / 360.0;
+			END_IF
+			fMotorLoad := 30.0 + _fJogSpeed * 20.0;
+		ELSE
+			// Released or mode changed -> stop
+			_mcMoveVelo.Execute := FALSE;
+			_mcStop.Execute := TRUE;
+			IF _mcStop.Done OR NOT _mcStop.Busy THEN
+				_mcStop.Execute := FALSE;
+				_mcPower.Enable := FALSE;
+				fBeltSpeed := 0.0;
+				fMotorLoad := 0.0;
+				_nState := 0;
+				AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'Jog stopped');
+			END_IF
+		END_IF
+
+	100: // ERROR / ESTOP
+		_mcMoveVelo.Execute := FALSE;
+		_mcStop.Execute := FALSE;
+		_mcPower.Enable := FALSE;
+		fBeltSpeed := 0.0;
+
+		IF _bEStopEffective THEN
+			eStatus := E_ConveyorStatus.EStop;
+		ELSE
+			eStatus := E_ConveyorStatus.Error;
+		END_IF
+
+		// On entry: clear any pending auto-reset from state 10/40
+		IF NOT _bResetRequested THEN
+			_mcReset.Execute := FALSE;
+		END_IF
+
+		// E-Stop triggered errors require confirmation; other errors just need Reset
+		IF _rtReset.Q AND NOT _bEStopEffective THEN
+			IF (NOT _bEStopTriggered) OR bEStopConfirmed THEN
+				_mcReset.Execute := TRUE;
+				_bResetRequested := TRUE;
+			END_IF
+		END_IF
+
+		IF _mcReset.Done AND _bResetRequested THEN
+			_mcReset.Execute := FALSE;
+			_bEStopTriggered := FALSE;
+			_bResetRequested := FALSE;
+			_nState := 0;
+			AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'System reset');
+		END_IF
+
+END_CASE
+
+// E-Stop active output (stays TRUE while in error state caused by E-Stop)
+bEStopActive := _bEStopTriggered;
+
+// Stopper delay
+_tonStopperDelay(IN := _bStopperRequest, PT := T#500MS);
+bStopperActive := _bStopperRequest;
+
+// MC function block calls
+IF __ISVALIDREF(_axis) THEN
+	_mcPower(Axis := _axis);
+	_mcMoveVelo(Axis := _axis);
+	_mcStop(Axis := _axis);
+	_mcReset(Axis := _axis);
+END_IF
+
+// Output alarm data
+nAlarmWriteIndex := _nAlarmIdx;
+]]></ST>
+    </Implementation>
+    <Method Name="init" Id="{b3435811-5828-4ec5-ae43-3139d0b343d1}">
+      <Declaration><![CDATA[METHOD init
+VAR_INPUT
+	axis : REFERENCE TO AXIS_REF;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[_axis REF= axis;
+_bInitDone := TRUE;
+_nState := 0;
+eStatus := E_ConveyorStatus.Stopped;
+fSpeedSetpoint := 1.0;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="AddAlarm" Id="{33308d18-6ee4-4db7-9278-7b6eff2045d2}">
+      <Declaration><![CDATA[METHOD PRIVATE AddAlarm
+VAR_INPUT
+	eSeverity : E_AlarmSeverity;
+	sMessage  : STRING(255);
+END_VAR
+VAR
+	sY  : STRING(4);
+	sMo : STRING(4);
+	sD  : STRING(4);
+	sH  : STRING(4);
+	sMi : STRING(4);
+	sS  : STRING(4);
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[// Format YYYY-MM-DD HH:MM:SS from FB_LocalSystemTime
+sY := WORD_TO_STRING(_fbLocalTime.systemTime.wYear);
+sMo := WORD_TO_STRING(_fbLocalTime.systemTime.wMonth);
+sD := WORD_TO_STRING(_fbLocalTime.systemTime.wDay);
+sH := WORD_TO_STRING(_fbLocalTime.systemTime.wHour);
+sMi := WORD_TO_STRING(_fbLocalTime.systemTime.wMinute);
+sS := WORD_TO_STRING(_fbLocalTime.systemTime.wSecond);
+// Zero-pad
+IF _fbLocalTime.systemTime.wMonth < 10 THEN sMo := CONCAT('0', sMo); END_IF
+IF _fbLocalTime.systemTime.wDay < 10 THEN sD := CONCAT('0', sD); END_IF
+IF _fbLocalTime.systemTime.wHour < 10 THEN sH := CONCAT('0', sH); END_IF
+IF _fbLocalTime.systemTime.wMinute < 10 THEN sMi := CONCAT('0', sMi); END_IF
+IF _fbLocalTime.systemTime.wSecond < 10 THEN sS := CONCAT('0', sS); END_IF
+
+aAlarms[_nAlarmIdx].sTimestamp := CONCAT(CONCAT(CONCAT(CONCAT(sY, '-'), sMo), CONCAT('-', sD)),
+                                         CONCAT(CONCAT(' ', sH), CONCAT(CONCAT(':', sMi), CONCAT(':', sS))));
+aAlarms[_nAlarmIdx].eSeverity := eSeverity;
+aAlarms[_nAlarmIdx].sMessage := sMessage;
+aAlarms[_nAlarmIdx].bActive := TRUE;
+
+_nAlarmIdx := (_nAlarmIdx + 1) MOD 20;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="ResetCount" Id="{6410bc31-2da3-4670-8b4b-5ce4ba870529}">
+      <Declaration><![CDATA[METHOD ResetCount
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nTodayCount := 0;
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

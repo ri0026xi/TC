@@ -11,7 +11,7 @@ as a compiler define in Structured Text.
 """
 
 import sys
-import xml.etree.ElementTree as ET
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -35,8 +35,9 @@ def _find_tsproj(solution_path: str) -> Optional[Path]:
 def get_active_variant(tsproj_path: str) -> Optional[str]:
     """Read the currently active variant from the .tsproj file."""
     try:
-        tree = ET.parse(tsproj_path)
-        return tree.getroot().get("TcProjectVariant")
+        content = Path(tsproj_path).read_text(encoding="utf-8")
+        m = re.search(r'TcProjectVariant="([^"]*)"', content)
+        return m.group(1) if m else None
     except Exception as exc:
         log("VARIANT", f"Failed to read variant: {exc}", error=True)
         return None
@@ -56,16 +57,24 @@ def activate_variant(
         return False
 
     try:
-        tree = ET.parse(str(tsproj))
-        root = tree.getroot()
-        current = root.get("TcProjectVariant", "")
+        content = tsproj.read_text(encoding="utf-8")
+
+        # Read current variant from the attribute
+        m = re.search(r'TcProjectVariant="([^"]*)"', content)
+        current = m.group(1) if m else ""
 
         if current == variant_name:
             log("VARIANT", f"Already on variant: {variant_name}")
             return True
 
-        root.set("TcProjectVariant", variant_name)
-        tree.write(str(tsproj), xml_declaration=True, encoding="utf-8")
+        # Replace only the attribute value — do not rewrite the rest of the file
+        new_content = re.sub(
+            r'TcProjectVariant="[^"]*"',
+            f'TcProjectVariant="{variant_name}"',
+            content,
+            count=1,
+        )
+        tsproj.write_text(new_content, encoding="utf-8")
 
         log("VARIANT", f"Switched variant: {current} -> {variant_name}")
         return True

@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <DUT Name="E_ConveyorStatus" Id="{d6d155af-2ac4-42b6-9c16-8c6771ad390e}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'to_string'}
+TYPE E_ConveyorStatus :
+(
+	Stopped := 0,
+	Starting,
+	Running,
+	Stopping,
+	Error,
+	EStop,
+	Jogging
+) UINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,106 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="PRG_Conveyor" Id="{289e6d87-64a1-4787-a788-75ade709a39d}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM PRG_Conveyor
+VAR
+	fbConveyor : FB_ConveyorControl;
+	bInit      : BOOL;
+	bS1        : BOOL;
+	bS2        : BOOL;
+	bS3        : BOOL;
+	bES        : BOOL;
+
+	// Workpiece transport simulation (SimMode)
+	_fPosAccum     : LREAL;    // Accumulated + direction distance (degrees)
+	_fWorkSpacing  : LREAL := 7200.0;  // Distance per cycle (deg, ~10s at max speed 2.0m/s)
+	_fSensorS1Pos  : LREAL := 0.0;     // S1 at start
+	_fSensorS2Pos  : LREAL := 2400.0;  // S2 at 1/3
+	_fSensorS3Pos  : LREAL := 4800.0;  // S3 at 2/3
+	_fSensorWidth  : LREAL := 500.0;   // Sensor active zone width
+	_fLastActPos   : LREAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[// Initialize with existing NC PTP sim axis
+IF NOT bInit THEN
+	fbConveyor.init(axis := GVL.axis1);
+	GVL_Conveyor.stHMI.fSpeedSetpoint := 1.0;
+	GVL_Conveyor.stHMI.bDirectionCmd := TRUE;
+	bInit := TRUE;
+END_IF
+
+// Select I/O source: simulation or real hardware
+IF GVL_Conveyor.bSimMode THEN
+	// Workpiece transport simulation based on axis + direction movement
+	// Accumulate positive-direction distance from axis actual velocity
+	IF bInit THEN
+		_fPosAccum := _fPosAccum + GVL.axis1.NcToPlc.ActVelo * 0.01;  // velocity * cycle_time(10ms)
+		IF _fPosAccum < 0.0 THEN
+			_fPosAccum := 0.0;  // Only count + direction movement
+		END_IF
+	END_IF
+
+	// Wrap accumulator within one work cycle
+	IF _fPosAccum >= _fWorkSpacing THEN
+		_fPosAccum := _fPosAccum - _fWorkSpacing;
+	END_IF
+
+	// Generate sensor signals based on position within cycle
+	bS1 := (_fPosAccum >= _fSensorS1Pos) AND (_fPosAccum < _fSensorS1Pos + _fSensorWidth);
+	bS2 := (_fPosAccum >= _fSensorS2Pos) AND (_fPosAccum < _fSensorS2Pos + _fSensorWidth);
+	bS3 := (_fPosAccum >= _fSensorS3Pos) AND (_fPosAccum < _fSensorS3Pos + _fSensorWidth);
+
+	// E-Stop from sim flag or HMI
+	bES := GVL_Conveyor.bSim_EStop;
+ELSE
+	bS1 := GVL_Conveyor.bS1_Entry_Raw;
+	bS2 := GVL_Conveyor.bS2_Mid_Raw;
+	bS3 := GVL_Conveyor.bS3_Exit_Raw;
+	bES := GVL_Conveyor.bEStop_Raw;
+END_IF
+
+// Call conveyor control FB
+fbConveyor(
+	bS1_Entry         := bS1,
+	bS2_Mid           := bS2,
+	bS3_Exit          := bS3,
+	bEStop            := bES,
+	bStart            := GVL_Conveyor.stHMI.bStart,
+	bStop             := GVL_Conveyor.stHMI.bStop,
+	bReset            := GVL_Conveyor.stHMI.bReset,
+	fSpeedSetpoint    := GVL_Conveyor.stHMI.fSpeedSetpoint,
+	eMode             := GVL_Conveyor.stHMI.eMode,
+	bEStopCmd         := GVL_Conveyor.stHMI.bEStopCmd,
+	bEStopConfirmed   := GVL_Conveyor.stHMI.bEStopConfirmed,
+	bDirectionCmd     := GVL_Conveyor.stHMI.bDirectionCmd,
+	bStopperManualCmd := GVL_Conveyor.stHMI.bStopperManualCmd,
+	bJog              := GVL_Conveyor.stHMI.bJog
+);
+
+// Clear one-shot buttons
+GVL_Conveyor.stHMI.bStart    := FALSE;
+GVL_Conveyor.stHMI.bStop     := FALSE;
+GVL_Conveyor.stHMI.bReset    := FALSE;
+GVL_Conveyor.stHMI.bEStopCmd := FALSE;
+
+// Map outputs to HMI struct
+GVL_Conveyor.stHMI.eSystemStatus   := fbConveyor.eStatus;
+GVL_Conveyor.stHMI.fBeltSpeed      := fbConveyor.fBeltSpeed;
+GVL_Conveyor.stHMI.fMotorLoad      := fbConveyor.fMotorLoad;
+GVL_Conveyor.stHMI.nTodayCount     := fbConveyor.nTodayCount;
+GVL_Conveyor.stHMI.bS1_Entry       := bS1;
+GVL_Conveyor.stHMI.bS2_Mid         := bS2;
+GVL_Conveyor.stHMI.bS3_Exit        := bS3;
+GVL_Conveyor.stHMI.bStopperActive  := fbConveyor.bStopperActive;
+GVL_Conveyor.stHMI.bEStop          := bES OR fbConveyor.bEStopActive;
+GVL_Conveyor.stHMI.bDirectionFwd   := fbConveyor.bDirectionFwd;
+GVL_Conveyor.stHMI.fWorkPosition   := _fPosAccum / _fWorkSpacing;  // 0.0 to 1.0
+GVL_Conveyor.stHMI.aAlarms         := fbConveyor.aAlarms;
+GVL_Conveyor.stHMI.nAlarmWriteIndex := fbConveyor.nAlarmWriteIndex;
+
+// Stopper output
+GVL_Conveyor.bStopperOut := fbConveyor.bStopperActive;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

@@ -24,6 +24,8 @@ TCUNIT_RUNNER_EXE = r"C:\Program Files (x86)\TcUnit-Runner\TcUnit-Runner.exe"
 DEFAULT_UMRT_PATH = r"C:\ProgramData\Beckhoff\TwinCAT\3.1\Runtimes\UmRT_Default"
 DEFAULT_ADS_DLL = r"C:\Program Files (x86)\Beckhoff\TwinCAT\3.1\Components\Base\v170\TwinCAT.Ads.dll"
 UMRT_SYSTEM_PORT = 300
+UMRT_SYSMANAGER_PORT = 10000
+MAX_WATCHDOG_RESTARTS = 10
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +44,7 @@ class PipelineConfig:
     ads_dll_path: str = DEFAULT_ADS_DLL
     variant_test: str = "Test"
     variant_release: str = "Release"
+    leave_running: bool = True
 
 
 @dataclass
@@ -106,6 +109,27 @@ def ads_set_state(ams_net_id: str, port: int, ads_dll: str, state: str) -> tuple
     )
     out = (proc.stdout or "").strip()
     return proc.returncode == 0 and not out.startswith("ERROR"), out
+
+
+def ads_read_state(ams_net_id: str, port: int, ads_dll: str) -> str:
+    """Read ADS state via PowerShell. Returns 'Run/0', 'Config/1', etc. or 'ERROR:...'."""
+    ps = (
+        f"$ErrorActionPreference='Stop'; "
+        f"Add-Type -Path '{ads_dll}'; "
+        f"$c = New-Object TwinCAT.Ads.TcAdsClient; "
+        f"try {{ "
+        f"$c.Connect('{ams_net_id}', {port}); "
+        f"$s=$c.ReadState(); "
+        f"Write-Output ($s.AdsState.ToString() + '/' + $s.DeviceState.ToString()) "
+        f"}} catch {{ Write-Output ('ERROR: ' + $_.Exception.Message) }} "
+        f"finally {{ $c.Dispose() }}"
+    )
+    proc = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", ps],
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace", timeout=10,
+    )
+    return (proc.stdout or "").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +215,35 @@ class UmRTManager:
     def stop_watchdog(self) -> None:
         self._watchdog_active = False
 
+    def restart_to_run(self, ams_net_id: str = "", ads_dll: str = "") -> bool:
+        """Restart UmRT and boot to RUN state via ADS Reset.
+
+        Sequence: kill stale → start (CONFIG) → ADS Reset → (boot project loads) → RUN.
+        """
+        if not self.start():
+            return False
+        _ams = ams_net_id or self._ams_net_id or self.get_ams_net_id()
+        _dll = ads_dll or self._ads_dll
+        if not _ams:
+            log("UMRT", "No AmsNetId for RUN transition", error=True)
+            return False
+        log("UMRT", "Sending ADS Reset to System Manager port")
+        ok, result = ads_set_state(_ams, UMRT_SYSMANAGER_PORT, _dll, "Reset")
+        if not ok:
+            log("UMRT", f"ADS Reset failed: {result}", error=True)
+            return False
+        # Wait for boot sequence to complete then verify PLC port is alive
+        log("UMRT", f"ADS Reset sent (initial: {result}), waiting for PLC boot...")
+        for attempt in range(15):
+            time.sleep(2)
+            state = ads_read_state(_ams, 851, _dll)  # Check PLC port, not system manager
+            if state.startswith("Run"):
+                log("UMRT", f"PLC reached RUN state ({(attempt+1)*2}s)")
+                return True
+            log("UMRT", f"PLC state poll {attempt+1}: {state}")
+        log("UMRT", f"PLC did not reach RUN within 30s (last: {state})", error=True)
+        return False
+
     # -- internal helpers --------------------------------------------------
 
     def _spawn_and_wait_config(self) -> bool:
@@ -235,7 +288,11 @@ class UmRTManager:
                 continue
             if self.process.poll() is not None:
                 self._restart_count += 1
-                log("UMRT", f"UmRT process died (restart #{self._restart_count})")
+                log("UMRT", f"UmRT process died (exit={self.process.returncode}, restart #{self._restart_count})")
+                if self._restart_count > MAX_WATCHDOG_RESTARTS:
+                    log("UMRT", f"Exceeded max restarts ({MAX_WATCHDOG_RESTARTS}), stopping watchdog", error=True)
+                    self._watchdog_active = False
+                    return
                 time.sleep(1)
                 try:
                     ok = self._spawn_and_wait_config()
@@ -353,6 +410,7 @@ def run_tcunit_runner(config: PipelineConfig) -> tuple[int, str, str]:
     )
 
     log_output = (proc.stdout or "") + (proc.stderr or "")
+    log("TEST", f"TcUnit-Runner exit code: {proc.returncode}")
     log_path = str(Path(solution).parent / "tcunit_runner.log")
     Path(log_path).write_text(log_output, encoding="utf-8")
     for line in log_output.splitlines():
@@ -512,65 +570,91 @@ def run_pipeline(config: PipelineConfig) -> int:
             ))
             return 1
 
-    # -- 2. TcUnit-Runner with UmRT watchdog ------------------------------
-    # TcUnit-Runner's ActivateConfiguration() kills UmRT.  The watchdog
-    # auto-restarts it so that StartRestartTwinCAT() finds a live runtime.
-    umrt.start_watchdog(ams_net_id=config.ams_net_id, ads_dll=config.ads_dll_path)
+    # -- 2-4. TcUnit-Runner + parse + cleanup (try-finally protected) -----
+    pipeline_rc = 1
     try:
-        exit_code, log_output, xunit_path = run_tcunit_runner(config)
-    except FileNotFoundError as exc:
-        umrt.stop_watchdog()
+        # Delete stale xUnit XML so build failures aren't masked by old results
+        xunit_path = str(Path(solution).parent / "TcUnit_xUnit_results.xml")
+        if os.path.exists(xunit_path):
+            os.remove(xunit_path)
+            log("TEST", "Deleted stale xUnit XML")
+
+        # -- 2. TcUnit-Runner with UmRT watchdog --------------------------
+        umrt.start_watchdog(ams_net_id=config.ams_net_id, ads_dll=config.ads_dll_path)
+        try:
+            exit_code, log_output, xunit_path = run_tcunit_runner(config)
+        except FileNotFoundError as exc:
+            emit(build_report(
+                status="ERROR", phase="test", exit_code=1,
+                message=str(exc), artifacts=artifacts,
+            ))
+            return 1
+        except subprocess.TimeoutExpired:
+            emit(build_report(
+                status="TIMEOUT", phase="test", exit_code=1,
+                message="TcUnit-Runner timed out", artifacts=artifacts,
+            ))
+            return 1
+        finally:
+            umrt.stop_watchdog()
+
+        artifacts["tcunit_log"] = str(Path(solution).parent / "tcunit_runner.log")
+        artifacts["xunit_xml"] = xunit_path
+
+        # -- 3. Check for build errors before parsing XML -----------------
+        build_error = any(
+            marker in log_output
+            for marker in ["ERROR: Build errors", "ERROR: Failed to build"]
+        )
+        if build_error:
+            emit(build_report(
+                status="BUILD_ERROR", phase="test", exit_code=exit_code,
+                message="TcUnit-Runner reported build errors",
+                artifacts=artifacts,
+            ))
+            return 1
+
+        # -- 3b. Parse results --------------------------------------------
+        results = parse_xunit_xml(xunit_path)
+
+        if results is None:
+            lowered = log_output.lower()
+            if "error loading vs dte" in lowered:
+                msg = "TcUnit-Runner could not load Visual Studio DTE"
+            elif "timeout" in lowered:
+                msg = "TcUnit-Runner timed out"
+            else:
+                msg = "xUnit XML was not produced"
+            emit(build_report(
+                status="ERROR", phase="test", exit_code=exit_code,
+                message=msg, artifacts=artifacts,
+            ))
+            return 1
+
+        status = "PASS" if results.all_passed else "TEST_FAIL"
         emit(build_report(
-            status="ERROR", phase="test", exit_code=1,
-            message=str(exc), artifacts=artifacts,
+            status=status, phase="test", exit_code=exit_code,
+            message="" if results.all_passed else "One or more TcUnit tests failed",
+            results=results, artifacts=artifacts,
         ))
-        return 1
-    except subprocess.TimeoutExpired:
-        umrt.stop_watchdog()
-        emit(build_report(
-            status="TIMEOUT", phase="test", exit_code=1,
-            message="TcUnit-Runner timed out", artifacts=artifacts,
-        ))
-        return 1
+        log("TEST", "\n" + format_markdown(results))
+        pipeline_rc = 0 if results.all_passed else 1
+
     finally:
-        umrt.stop_watchdog()
+        # -- 4. ALWAYS restore Release variant ----------------------------
+        if config.variant_release:
+            if activate_variant(solution, config.variant_release):
+                log("VARIANT", f"Restored variant: {config.variant_release}")
+            else:
+                log("VARIANT", f"Warning: failed to restore '{config.variant_release}'", error=True)
 
-    artifacts["tcunit_log"] = str(Path(solution).parent / "tcunit_runner.log")
-    artifacts["xunit_xml"] = xunit_path
+        # -- 5. Leave UmRT in RUN state for post-pipeline use -------------
+        if config.leave_running:
+            log("UMRT", "Restarting UmRT to RUN state")
+            if not umrt.restart_to_run(ams_net_id=config.ams_net_id, ads_dll=config.ads_dll_path):
+                log("UMRT", "Warning: could not restart UmRT to RUN", error=True)
 
-    # -- 3. Parse results -------------------------------------------------
-    results = parse_xunit_xml(xunit_path)
-
-    if results is None:
-        lowered = log_output.lower()
-        if "error loading vs dte" in lowered:
-            msg = "TcUnit-Runner could not load Visual Studio DTE"
-        elif "timeout" in lowered:
-            msg = "TcUnit-Runner timed out"
-        else:
-            msg = "xUnit XML was not produced"
-        emit(build_report(
-            status="ERROR", phase="test", exit_code=exit_code,
-            message=msg, artifacts=artifacts,
-        ))
-        return 1
-
-    status = "PASS" if results.all_passed else "TEST_FAIL"
-    emit(build_report(
-        status=status, phase="test", exit_code=exit_code,
-        message="" if results.all_passed else "One or more TcUnit tests failed",
-        results=results, artifacts=artifacts,
-    ))
-    log("TEST", "\n" + format_markdown(results))
-
-    # -- 4. Restore Release variant ----------------------------------------
-    if config.variant_release:
-        if activate_variant(solution, config.variant_release):
-            log("VARIANT", f"Restored variant: {config.variant_release}")
-        else:
-            log("VARIANT", f"Warning: failed to restore '{config.variant_release}'", error=True)
-
-    return 0 if results.all_passed else 1
+    return pipeline_rc
 
 
 # ---------------------------------------------------------------------------
@@ -606,6 +690,10 @@ def main():
     parser.add_argument("--ams-net-id", "-a", help="AMS NetId override")
     parser.add_argument("--tc-version", help="TwinCAT version")
     parser.add_argument("--timeout", "-u", type=int, help="Timeout in minutes")
+    parser.add_argument("--leave-running", action="store_true", default=True,
+                        help="Leave UmRT in RUN state after pipeline (default)")
+    parser.add_argument("--no-leave-running", dest="leave_running", action="store_false",
+                        help="Do not restart UmRT after pipeline")
     args = parser.parse_args()
 
     config_path = args.config or os.path.join(
@@ -625,6 +713,7 @@ def main():
         config.tc_version = args.tc_version
     if args.timeout:
         config.timeout_minutes = args.timeout
+    config.leave_running = args.leave_running
 
     sys.exit(run_pipeline(config))
 

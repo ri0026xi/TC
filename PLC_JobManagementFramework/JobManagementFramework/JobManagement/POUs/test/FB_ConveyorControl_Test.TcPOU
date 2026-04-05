@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <POU Name="FB_ConveyorControl_Test" Id="{1294cbc6-0ada-4602-bf3a-379f7a2047c4}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ConveyorControl_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[TestConveyorBuildCheck();
+]]></ST>
+    </Implementation>
+    <Method Name="TestConveyorBuildCheck" Id="{0b1332b7-22df-426d-bb42-2723a9680ab8}">
+      <Declaration><![CDATA[METHOD PRIVATE TestConveyorBuildCheck
+VAR
+	hmi : ST_ConveyorHMI;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestConveyorBuildCheck');
+
+hmi.eSystemStatus := E_ConveyorStatus.Stopped;
+hmi.fBeltSpeed := 0.0;
+hmi.nTodayCount := 0;
+
+AssertEquals_UINT(Expected := 0, Actual := hmi.eSystemStatus, Message := 'Status should be Stopped');
+
+TEST_FINISHED();
+]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

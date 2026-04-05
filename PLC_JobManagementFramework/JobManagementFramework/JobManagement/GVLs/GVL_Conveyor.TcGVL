@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <GVL Name="GVL_Conveyor" Id="{e3b42c4f-e083-425b-a048-c3fc91c02b74}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+VAR_GLOBAL
+	// Physical I/O
+	bS1_Entry_Raw    AT%I* : BOOL;
+	bS2_Mid_Raw      AT%I* : BOOL;
+	bS3_Exit_Raw     AT%I* : BOOL;
+	bEStop_Raw       AT%I* : BOOL;
+	bStopperOut      AT%Q* : BOOL;
+
+	// HMI exchange structure
+	stHMI            : ST_ConveyorHMI;
+
+	// Simulation
+	bSimMode         : BOOL := TRUE;
+	bSim_S1          : BOOL;
+	bSim_S2          : BOOL;
+	bSim_S3          : BOOL;
+	bSim_EStop       : BOOL;
+END_VAR
+]]></Declaration>
+  </GVL>
+</TcPlcObject>

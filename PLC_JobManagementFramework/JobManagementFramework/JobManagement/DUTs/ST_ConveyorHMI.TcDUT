@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4026.17">
+  <DUT Name="ST_ConveyorHMI" Id="{b745fb8b-6f96-4296-8fb0-6e7193a59ef9}">
+    <Declaration><![CDATA[TYPE ST_ConveyorHMI :
+STRUCT
+	// Status
+	eSystemStatus    : E_ConveyorStatus;
+	fBeltSpeed       : LREAL;
+	fMotorLoad       : LREAL;
+	nTodayCount      : UDINT;
+
+	// Sensor states
+	bS1_Entry        : BOOL;
+	bS2_Mid          : BOOL;
+	bS3_Exit         : BOOL;
+
+	// Actuator states
+	bStopperActive   : BOOL;
+	bEStop           : BOOL;
+	bDirectionFwd    : BOOL;   // Current direction (read)
+	fWorkPosition    : LREAL;  // Workpiece position 0.0-1.0 within cycle
+
+	// Operation commands (HMI writes)
+	bStart           : BOOL;
+	bStop            : BOOL;
+	bReset           : BOOL;
+	fSpeedSetpoint   : LREAL;
+	eMode            : E_ConveyorMode;
+	bEStopCmd        : BOOL;   // Software E-Stop from HMI
+	bEStopConfirmed  : BOOL;   // E-Stop acknowledged before reset
+	bDirectionCmd    : BOOL;   // Direction request: TRUE=FWD, FALSE=REV
+	bStopperManualCmd : BOOL;  // Manual stopper ON/OFF
+	bJog             : BOOL;   // Jog in current direction (held)
+
+	// Alarm log (circular buffer)
+	aAlarms          : ARRAY[0..19] OF ST_AlarmEntry;
+	nAlarmWriteIndex : UINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

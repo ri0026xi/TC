@@ -1,0 +1,9 @@
+{
+  "ams_net_id": "199.4.42.250.1.1",
+  "ads_port": 851,
+  "poll_interval_ms": 50,
+  "http_port": 8080,
+  "hmi_symbol_prefix": "GVL_Conveyor.stHMI",
+  "speed_setpoint_min": 0.1,
+  "speed_setpoint_max": 2.0
+}

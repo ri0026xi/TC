@@ -1655,14 +1655,14 @@ External Setpoint Generation:
 				<ProjectVariant PvUseDefine="true">
 					<Variant>
 						<Name>Release</Name>
-						<Defines></Defines>
+						<Defines/>
 					</Variant>
 					<Variant>
 						<Name>Test</Name>
-						<Defines/>
+						<Defines></Defines>
 					</Variant>
 				</ProjectVariant>
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{A645F2D1-7B8C-74F5-8971-CC648675AC5C}" TmcPath="JobManagement\JobManagement.tmc">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcHash="{38390120-3CC4-B356-C691-562C07C54D8C}" TmcPath="JobManagement\JobManagement.tmc">
 					<Name>JobManagement Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Vars VarGrpType="2" AreaNo="1">
@@ -1675,6 +1675,10 @@ External Setpoint Generation:
 							<Name>GVL.axis2.PlcToNc</Name>
 							<Type GUID="{96B75FEB-2D84-43BE-A3EC-D9A681F27D52}" Namespace="MC">PLCTONC_AXIS_REF</Type>
 						</Var>
+						<Var>
+							<Name>GVL_Conveyor.bStopperOut</Name>
+							<Type>BOOL</Type>
+						</Var>
 					</Vars>
 					<Vars VarGrpType="1">
 						<Name>PlcTask Inputs</Name>
@@ -1685,6 +1689,23 @@ External Setpoint Generation:
 						<Var>
 							<Name>GVL.axis2.NcToPlc</Name>
 							<Type GUID="{25521FAA-EA5F-4C7F-8864-BBCCDACD2E98}" Namespace="MC">NCTOPLC_AXIS_REF</Type>
+						</Var>
+						<Var>
+							<Name>GVL_Conveyor.bS1_Entry_Raw</Name>
+							<Comment><![CDATA[ Physical I/O]]></Comment>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>GVL_Conveyor.bS2_Mid_Raw</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>GVL_Conveyor.bS3_Exit_Raw</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>GVL_Conveyor.bEStop_Raw</Name>
+							<Type>BOOL</Type>
 						</Var>
 					</Vars>
 					<Contexts>

@@ -288,7 +288,35 @@
     <Compile Include="POUs\MotionCommand.TcDUT">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="DUTs\E_ConveyorStatus.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\E_ConveyorMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\E_AlarmSeverity.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\ST_AlarmEntry.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\ST_ConveyorHMI.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GVLs\GVL_Conveyor.TcGVL">
+      <SubType>Code</SubType>
+      <LinkAlways>true</LinkAlways>
+    </Compile>
+    <Compile Include="POUs\conveyor\FB_ConveyorControl.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\conveyor\PRG_Conveyor.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="POUs\test\FB_TaskRunner_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\test\FB_ConveyorControl_Test.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="POUs\test\UnitTest.TcPOU">
@@ -315,6 +343,7 @@
     <Folder Include="POUs\model\activities" />
     <Folder Include="POUs\model\library" />
     <Folder Include="POUs\model\library\Observer" />
+    <Folder Include="POUs\conveyor" />
     <Folder Include="POUs\test" />
     <Folder Include="VISUs" />
     <Folder Include="POUs" />
