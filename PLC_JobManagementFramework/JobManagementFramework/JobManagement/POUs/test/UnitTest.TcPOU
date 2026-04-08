@@ -8,9 +8,14 @@ VAR
 END_VAR
 ]]></Declaration>
     <Implementation>
-      <ST><![CDATA[fbTaskRunner_Test();
+      <ST><![CDATA[// Production program — always runs regardless of variant
+PRG_Conveyor();
+
+{IF NOT defined (Release)}
+fbTaskRunner_Test();
 fbConveyorControl_Test();
 TcUnit.RUN();
+{END_IF}
 ]]></ST>
     </Implementation>
     <LineIds Name="UnitTest">

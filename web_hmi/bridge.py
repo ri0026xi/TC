@@ -308,7 +308,16 @@ async def poll_loop(manager, interval_s):
         except Exception as exc:
             log.error("Poll error: %s", exc)
             manager.disconnect()
-            await asyncio.sleep(5)
+            # Notify clients that we're reconnecting (prevents client-side watchdog timeout)
+            reconn_msg = json.dumps({"type": "reconnecting", "ts": time.time()})
+            dead = set()
+            for ws in clients:
+                try:
+                    await ws.send_str(reconn_msg)
+                except Exception:
+                    dead.add(ws)
+            clients.difference_update(dead)
+            await asyncio.sleep(1)
             try:
                 manager.connect()
             except Exception:
@@ -321,7 +330,7 @@ async def poll_loop(manager, interval_s):
 # ---------------------------------------------------------------------------
 
 async def ws_handler(request):
-    ws = web.WebSocketResponse()
+    ws = web.WebSocketResponse(heartbeat=10.0)  # ping every 10s, disconnect if no pong in 10s
     await ws.prepare(request)
     clients.add(ws)
     log.info("Client connected (%d total)", len(clients))
