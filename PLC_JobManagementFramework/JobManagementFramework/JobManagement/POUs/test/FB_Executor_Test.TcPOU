@@ -27,7 +27,7 @@ AssertTrue(
 	Message := 'Initial state should be idle');
 AssertFalse(Condition := executor.done, Message := 'done should be FALSE initially');
 AssertFalse(Condition := executor.busy, Message := 'busy should be FALSE initially');
-AssertEquals_DINT(Expected := 0, Actual := executor.nErrorID, Message := 'nErrorID should be 0 initially');
+AssertEquals_DWORD(Expected := 0, Actual := executor.nErrorID, Message := 'nErrorID should be 0 initially');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -91,7 +91,7 @@ CASE nStep OF
 			Condition := executor.current_state = E_FutureExecutionState.finish,
 			Message := 'Should reach finish state');
 		AssertTrue(Condition := executor.done, Message := 'done should be TRUE at finish');
-		AssertEquals_DINT(Expected := 0, Actual := executor.nErrorID, Message := 'No error expected');
+		AssertEquals_DWORD(Expected := 0, Actual := executor.nErrorID, Message := 'No error expected');
 		TEST_FINISHED();
 END_CASE
 

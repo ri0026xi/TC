@@ -27,7 +27,8 @@ IF NOT bCalled THEN
 END_IF
 
 AssertEquals_UDINT(Expected := 0, Actual := runner.num_of_jobs, Message := 'Initial num_of_jobs should be 0');
-AssertFalse(Condition := runner.job_empty, Message := 'job_empty should be FALSE initially');
+// job_empty = (last_job_number > 0 AND num_of_jobs = 0) — on first cycle last_job_number is 0, so always FALSE
+AssertFalse(Condition := runner.job_empty, Message := 'job_empty should be FALSE when no jobs have ever run');
 
 TEST_FINISHED();]]></ST>
       </Implementation>
@@ -135,24 +136,17 @@ CASE nStep OF
 		IF nCycle > 10 THEN
 			nStep := 3;
 		END_IF
-	3: // Abort
+	3: // Abort and verify
 		runner.abort();
 		runner();
-		nStep := 4;
-	4: // Wait for abort to complete
-		runner.abort();
-		runner();
-		IF runner.num_of_jobs = 0 THEN
-			nStep := 5;
-		END_IF
-	5: // Verify
-		AssertTrue(Condition := TRUE, Message := 'Abort completed successfully');
+		// QUEUE container is persistent — aborted jobs remain in count
+		// Verify abort was called without error
+		AssertEquals_UDINT(Expected := 1, Actual := runner.num_of_jobs, Message := 'Job should still be counted in persistent queue after abort');
 		TEST_FINISHED();
 END_CASE
 
 IF nCycle > 200 THEN
-	// Abort may not clear num_of_jobs for persistent queue, just pass
-	AssertTrue(Condition := TRUE, Message := 'Abort test completed (timeout path)');
+	AssertTrue(Condition := FALSE, Message := 'TestAbort timed out');
 	TEST_FINISHED();
 END_IF]]></ST>
       </Implementation>
