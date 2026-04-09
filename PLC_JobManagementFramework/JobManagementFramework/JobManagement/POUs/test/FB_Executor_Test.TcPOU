@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="FB_Executor_Test" Id="{3ce8e1a2-0055-4836-8c35-4c4d7e23017e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Executor_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[TestInitialStateIdle();
+TestExecuteWithoutFuture();
+TestStateProgression();
+TestAbortFromProcess();
+TestBusyProperty();
+TestReadyAtWaitForProcess();]]></ST>
+    </Implementation>
+    <Method Name="TestInitialStateIdle" Id="{8f3cb004-5ca0-44df-9c30-4679fce840b8}">
+      <Declaration><![CDATA[METHOD PRIVATE TestInitialStateIdle
+VAR_INST
+	executor : FB_Executor;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestInitialStateIdle');
+
+AssertTrue(
+	Condition := executor.current_state = E_FutureExecutionState.idle,
+	Message := 'Initial state should be idle');
+AssertFalse(Condition := executor.done, Message := 'done should be FALSE initially');
+AssertFalse(Condition := executor.busy, Message := 'busy should be FALSE initially');
+AssertEquals_DINT(Expected := 0, Actual := executor.nErrorID, Message := 'nErrorID should be 0 initially');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestExecuteWithoutFuture" Id="{52de47ae-c11c-4f64-8cce-ebd6885a64ff}">
+      <Declaration><![CDATA[METHOD PRIVATE TestExecuteWithoutFuture
+VAR_INST
+	executor : FB_Executor;
+END_VAR
+VAR
+	bResult : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestExecuteWithoutFuture');
+
+bResult := executor.execute();
+
+AssertTrue(Condition := bResult, Message := 'execute without future should return TRUE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestStateProgression" Id="{a38f56c7-baba-4873-8636-ff4f5b2a6469}">
+      <Declaration><![CDATA[METHOD PRIVATE TestStateProgression
+VAR_INST
+	executor : FB_Executor;
+	futureSleep : FutureSleep;
+	nStep : UINT;
+	nCycle : UINT;
+	bSetup : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestStateProgression');
+
+nCycle := nCycle + 1;
+
+CASE nStep OF
+	0: // Setup
+		IF NOT bSetup THEN
+			futureSleep.sleep_time := T#50MS;
+			executor.future := futureSleep;
+			bSetup := TRUE;
+		END_IF
+		executor.execute();
+		nStep := 1;
+	1: // Wait for init -> wait_for_process
+		executor.execute();
+		IF executor.current_state = E_FutureExecutionState.wait_for_process THEN
+			AssertTrue(Condition := executor.ready, Message := 'ready should be TRUE at wait_for_process');
+			executor.start();
+			nStep := 2;
+		END_IF
+	2: // Wait for process -> quit -> finish
+		IF executor.execute() THEN
+			nStep := 3;
+		END_IF
+	3: // Verify finish
+		AssertTrue(
+			Condition := executor.current_state = E_FutureExecutionState.finish,
+			Message := 'Should reach finish state');
+		AssertTrue(Condition := executor.done, Message := 'done should be TRUE at finish');
+		AssertEquals_DINT(Expected := 0, Actual := executor.nErrorID, Message := 'No error expected');
+		TEST_FINISHED();
+END_CASE
+
+IF nCycle > 500 THEN
+	AssertTrue(Condition := FALSE, Message := 'TestStateProgression timed out');
+	TEST_FINISHED();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestAbortFromProcess" Id="{3efa9496-cab5-445f-a91f-365b4ece116d}">
+      <Declaration><![CDATA[METHOD PRIVATE TestAbortFromProcess
+VAR_INST
+	executor : FB_Executor;
+	futureSleep : FutureSleep;
+	nStep : UINT;
+	nCycle : UINT;
+	bSetup : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestAbortFromProcess');
+
+nCycle := nCycle + 1;
+
+CASE nStep OF
+	0: // Setup with long sleep
+		IF NOT bSetup THEN
+			futureSleep.sleep_time := T#30S;
+			executor.future := futureSleep;
+			bSetup := TRUE;
+		END_IF
+		executor.execute();
+		nStep := 1;
+	1: // Wait for wait_for_process, then start
+		executor.execute();
+		IF executor.current_state = E_FutureExecutionState.wait_for_process THEN
+			executor.start();
+			nStep := 2;
+		END_IF
+	2: // Wait for process state, then abort
+		executor.execute();
+		IF executor.current_state = E_FutureExecutionState.process THEN
+			executor.abort();
+			nStep := 3;
+		END_IF
+	3: // Verify abort state reached
+		executor.execute();
+		AssertTrue(
+			Condition := executor.current_state = E_FutureExecutionState.abort,
+			Message := 'Should be in abort state');
+		TEST_FINISHED();
+END_CASE
+
+IF nCycle > 100 THEN
+	AssertTrue(Condition := FALSE, Message := 'TestAbortFromProcess timed out');
+	TEST_FINISHED();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestBusyProperty" Id="{73bd267d-4b8b-415a-b720-a032359a22b0}">
+      <Declaration><![CDATA[METHOD PRIVATE TestBusyProperty
+VAR_INST
+	executor : FB_Executor;
+	futureSleep : FutureSleep;
+	nStep : UINT;
+	nCycle : UINT;
+	bSetup : BOOL;
+	bBusyDuringProcess : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestBusyProperty');
+
+nCycle := nCycle + 1;
+
+CASE nStep OF
+	0: // Verify not busy initially
+		AssertFalse(Condition := executor.busy, Message := 'busy should be FALSE before setup');
+		IF NOT bSetup THEN
+			futureSleep.sleep_time := T#50MS;
+			executor.future := futureSleep;
+			bSetup := TRUE;
+		END_IF
+		executor.execute();
+		nStep := 1;
+	1: // Wait for init/wait_for_process
+		executor.execute();
+		IF executor.current_state = E_FutureExecutionState.wait_for_process THEN
+			executor.start();
+			nStep := 2;
+		END_IF
+	2: // Check busy during process
+		executor.execute();
+		IF executor.current_state = E_FutureExecutionState.process THEN
+			bBusyDuringProcess := executor.busy;
+			nStep := 3;
+		END_IF
+	3: // Wait for finish
+		IF executor.execute() THEN
+			nStep := 4;
+		END_IF
+	4: // Verify
+		AssertTrue(Condition := bBusyDuringProcess, Message := 'busy should be TRUE during process');
+		AssertFalse(Condition := executor.busy, Message := 'busy should be FALSE after finish');
+		TEST_FINISHED();
+END_CASE
+
+IF nCycle > 500 THEN
+	AssertTrue(Condition := FALSE, Message := 'TestBusyProperty timed out');
+	TEST_FINISHED();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestReadyAtWaitForProcess" Id="{f8c236a7-a46d-4293-a908-ed2e4818058e}">
+      <Declaration><![CDATA[METHOD PRIVATE TestReadyAtWaitForProcess
+VAR_INST
+	executor : FB_Executor;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestReadyAtWaitForProcess');
+
+// ready is defined as: _state = E_FutureExecutionState.wait_for_process
+// Verify that a fresh executor (idle state) reports ready=FALSE
+AssertFalse(Condition := executor.ready, Message := 'ready should be FALSE when idle');
+
+// Note: ready=TRUE at wait_for_process is already verified in TestStateProgression
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

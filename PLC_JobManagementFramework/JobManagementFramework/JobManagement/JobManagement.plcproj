@@ -322,6 +322,15 @@
     <Compile Include="POUs\test\UnitTest.TcPOU">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="POUs\test\FB_EventMessageQueue_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\test\FB_FutureSleep_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="POUs\test\FB_Executor_Test.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Visualization Manager.TcVMO">
       <SubType>Code</SubType>
     </Compile>

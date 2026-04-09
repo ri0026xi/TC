@@ -1,10 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<testsuites failures="0" tests="3">
-  <testsuite id="0" name="UnitTest.fbTaskRunner_Test" tests="1" failures="0">
-    <testcase name="_01_TrueIsTrue" assertions="0" classname="UnitTest.fbTaskRunner_Test" status="PASS" />
+<testsuites failures="0" tests="39">
+  <testsuite id="0" name="UnitTest.fbTaskRunner_Test" tests="4" failures="0">
+    <testcase name="TestInitialState" assertions="0" classname="UnitTest.fbTaskRunner_Test" status="PASS" />
+    <testcase name="TestCreateJobIncreasesCount" assertions="0" classname="UnitTest.fbTaskRunner_Test" status="PASS" />
+    <testcase name="TestJobCompletion" assertions="0" classname="UnitTest.fbTaskRunner_Test" status="PASS" />
+    <testcase name="TestAbort" assertions="0" classname="UnitTest.fbTaskRunner_Test" status="PASS" />
   </testsuite>
   <testsuite id="1" name="UnitTest.fbConveyorControl_Test" tests="2" failures="0">
     <testcase name="TestConveyorBuildCheck" assertions="0" classname="UnitTest.fbConveyorControl_Test" status="PASS" />
-    <testcase name="_01_TrueIsTrue" assertions="0" classname="UnitTest.fbConveyorControl_Test" status="PASS" />
+    <testcase name="TestEStopSoftwareRecovery" assertions="0" classname="UnitTest.fbConveyorControl_Test" status="PASS" />
+  </testsuite>
+  <testsuite id="2" name="UnitTest.fbEventMessageQueue_Test" tests="7" failures="0">
+    <testcase name="TestInitialState" assertions="0" classname="UnitTest.fbEventMessageQueue_Test" status="PASS" />
+    <testcase name="TestPutSingle" assertions="0" classname="UnitTest.fbEventMessageQueue_Test" status="PASS" />
+    <testcase name="TestPutAndGet" assertions="0" classname="UnitTest.fbEventMessageQueue_Test" status="PASS" />
+    <testcase name="TestGetFromEmpty" assertions="0" classname="UnitTest.fbEventMessageQueue_Test" status="PASS" />
+    <testcase name="TestFIFOOrder" assertions="0" classname="UnitTest.fbEventMessageQueue_Test" status="PASS" />
+    <testcase name="TestFullQueue" assertions="0" classname="UnitTest.fbEventMessageQueue_Test" status="PASS" />
+    <testcase name="TestWrapAround" assertions="0" classname="UnitTest.fbEventMessageQueue_Test" status="PASS" />
+  </testsuite>
+  <testsuite id="3" name="UnitTest.fbFutureSleep_Test" tests="4" failures="0">
+    <testcase name="TestInitResetsTimer" assertions="0" classname="UnitTest.fbFutureSleep_Test" status="PASS" />
+    <testcase name="TestExecuteNotDoneImmediately" assertions="0" classname="UnitTest.fbFutureSleep_Test" status="PASS" />
+    <testcase name="TestExecuteCompletesAfterTime" assertions="0" classname="UnitTest.fbFutureSleep_Test" status="PASS" />
+    <testcase name="TestQuitReturnsTrue" assertions="0" classname="UnitTest.fbFutureSleep_Test" status="PASS" />
+  </testsuite>
+  <testsuite id="4" name="UnitTest.fbExecutor_Test" tests="22" failures="0">
+    <testcase name="TestInitialStateIdle" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestExecuteWithoutFuture" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestStateProgression" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestAbortFromProcess" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestBusyProperty" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestReadyAtWaitForProcess" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestInitialState" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestCreateJobIncreasesCount" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestJobCompletion" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestAbort" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestConveyorBuildCheck" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestEStopSoftwareRecovery" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestPutSingle" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestPutAndGet" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestGetFromEmpty" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestFIFOOrder" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestFullQueue" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestWrapAround" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestInitResetsTimer" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestExecuteNotDoneImmediately" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestExecuteCompletesAfterTime" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
+    <testcase name="TestQuitReturnsTrue" assertions="0" classname="UnitTest.fbExecutor_Test" status="PASS" />
   </testsuite>
 </testsuites>

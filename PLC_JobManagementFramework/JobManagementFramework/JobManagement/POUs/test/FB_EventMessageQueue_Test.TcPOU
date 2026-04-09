@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="FB_EventMessageQueue_Test" Id="{f74eec91-045e-497b-b85d-7d3b263a9583}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_EventMessageQueue_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[TestInitialState();
+TestPutSingle();
+TestPutAndGet();
+TestGetFromEmpty();
+TestFIFOOrder();
+TestFullQueue();
+TestWrapAround();]]></ST>
+    </Implementation>
+    <Method Name="TestInitialState" Id="{c059b0e8-1b75-4833-8c47-ddb2c10f2242}">
+      <Declaration><![CDATA[METHOD PRIVATE TestInitialState
+VAR_INST
+	fbQueue : FB_EventMessageQueue;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestInitialState');
+
+AssertEquals_UDINT(Expected := 0, Actual := fbQueue.usage, Message := 'Initial usage should be 0');
+AssertFalse(Condition := fbQueue.full, Message := 'Initial queue should not be full');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestPutSingle" Id="{bd5668b5-e7d7-477f-8dc6-a00898db037b}">
+      <Declaration><![CDATA[METHOD PRIVATE TestPutSingle
+VAR_INST
+	fbQueue : FB_EventMessageQueue;
+	bDone : BOOL;
+	bPutResult : BOOL;
+	nUsageAfterPut : UDINT;
+END_VAR
+VAR
+	msg : ST_JobEventMessage;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestPutSingle');
+
+IF NOT bDone THEN
+	msg.subject := 'TEST_EVENT';
+	bPutResult := fbQueue.put(fbEvent := msg);
+	nUsageAfterPut := fbQueue.usage;
+	bDone := TRUE;
+END_IF
+
+AssertTrue(Condition := bPutResult, Message := 'put should return TRUE');
+AssertEquals_UDINT(Expected := 1, Actual := nUsageAfterPut, Message := 'Usage should be 1 after put');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestPutAndGet" Id="{bf0a55c6-891d-4aaf-8d6c-0851eea81f8e}">
+      <Declaration><![CDATA[METHOD PRIVATE TestPutAndGet
+VAR_INST
+	fbQueue : FB_EventMessageQueue;
+END_VAR
+VAR
+	msgIn : ST_JobEventMessage;
+	msgOut : REFERENCE TO ST_JobEventMessage;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestPutAndGet');
+
+msgIn.subject := 'HELLO';
+fbQueue.put(fbEvent := msgIn);
+msgOut REF= fbQueue.get();
+
+AssertTrue(Condition := __ISVALIDREF(msgOut), Message := 'get should return valid reference');
+AssertEquals_STRING(Expected := 'HELLO', Actual := msgOut.subject, Message := 'Subject should match');
+AssertEquals_UDINT(Expected := 0, Actual := fbQueue.usage, Message := 'Usage should be 0 after get');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestGetFromEmpty" Id="{7140b17c-ef63-47dd-bed1-6264fbd43c59}">
+      <Declaration><![CDATA[METHOD PRIVATE TestGetFromEmpty
+VAR_INST
+	fbQueue : FB_EventMessageQueue;
+END_VAR
+VAR
+	msgOut : REFERENCE TO ST_JobEventMessage;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestGetFromEmpty');
+
+msgOut REF= fbQueue.get();
+
+AssertFalse(Condition := __ISVALIDREF(msgOut), Message := 'get from empty should return invalid ref');
+AssertEquals_UDINT(Expected := 0, Actual := fbQueue.usage, Message := 'Usage should remain 0');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestFIFOOrder" Id="{f107338b-f6d8-47dc-be73-d10fbff51f30}">
+      <Declaration><![CDATA[METHOD PRIVATE TestFIFOOrder
+VAR_INST
+	fbQueue : FB_EventMessageQueue;
+END_VAR
+VAR
+	msg1 : ST_JobEventMessage;
+	msg2 : ST_JobEventMessage;
+	out1 : REFERENCE TO ST_JobEventMessage;
+	out2 : REFERENCE TO ST_JobEventMessage;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestFIFOOrder');
+
+msg1.subject := 'FIRST';
+msg2.subject := 'SECOND';
+fbQueue.put(fbEvent := msg1);
+fbQueue.put(fbEvent := msg2);
+
+out1 REF= fbQueue.get();
+out2 REF= fbQueue.get();
+
+AssertEquals_STRING(Expected := 'FIRST', Actual := out1.subject, Message := 'First get should be FIRST');
+AssertEquals_STRING(Expected := 'SECOND', Actual := out2.subject, Message := 'Second get should be SECOND');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestFullQueue" Id="{c702637b-3453-4a98-8439-d92c7433f10f}">
+      <Declaration><![CDATA[METHOD PRIVATE TestFullQueue
+VAR_INST
+	fbQueue : FB_EventMessageQueue;
+END_VAR
+VAR
+	msg : ST_JobEventMessage;
+	i : UDINT;
+	bResult : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestFullQueue');
+
+msg.subject := 'FILL';
+FOR i := 1 TO 50 DO
+	fbQueue.put(fbEvent := msg);
+END_FOR
+
+AssertTrue(Condition := fbQueue.full, Message := 'Queue should be full after 50 puts');
+AssertEquals_UDINT(Expected := 50, Actual := fbQueue.usage, Message := 'Usage should be 50');
+
+bResult := fbQueue.put(fbEvent := msg);
+AssertFalse(Condition := bResult, Message := 'put to full queue should return FALSE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestWrapAround" Id="{c6569117-345d-495c-8e7f-bf40f732f84e}">
+      <Declaration><![CDATA[METHOD PRIVATE TestWrapAround
+VAR_INST
+	fbQueue : FB_EventMessageQueue;
+END_VAR
+VAR
+	msg : ST_JobEventMessage;
+	msgOut : REFERENCE TO ST_JobEventMessage;
+	i : UDINT;
+	nGetCount : UDINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestWrapAround');
+
+// Fill queue to 50
+msg.subject := 'WRAP';
+FOR i := 1 TO 50 DO
+	fbQueue.put(fbEvent := msg);
+END_FOR
+
+// Drain 25
+FOR i := 1 TO 25 DO
+	fbQueue.get();
+END_FOR
+AssertEquals_UDINT(Expected := 25, Actual := fbQueue.usage, Message := 'Usage should be 25 after partial drain');
+
+// Add 25 more (wraps write pointer)
+FOR i := 1 TO 25 DO
+	fbQueue.put(fbEvent := msg);
+END_FOR
+AssertEquals_UDINT(Expected := 50, Actual := fbQueue.usage, Message := 'Usage should be 50 after refill');
+
+// Drain all 50
+nGetCount := 0;
+FOR i := 1 TO 50 DO
+	msgOut REF= fbQueue.get();
+	IF __ISVALIDREF(msgOut) THEN
+		nGetCount := nGetCount + 1;
+	END_IF
+END_FOR
+
+AssertEquals_UDINT(Expected := 50, Actual := nGetCount, Message := 'Should get 50 valid items after wrap');
+AssertEquals_UDINT(Expected := 0, Actual := fbQueue.usage, Message := 'Usage should be 0 after full drain');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

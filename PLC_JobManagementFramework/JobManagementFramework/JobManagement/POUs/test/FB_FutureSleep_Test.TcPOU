@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="FB_FutureSleep_Test" Id="{af8f5f4b-83ec-4fc8-8908-e5f9d6d3e6c3}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_FutureSleep_Test EXTENDS TcUnit.FB_TestSuite
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[TestInitResetsTimer();
+TestExecuteNotDoneImmediately();
+TestExecuteCompletesAfterTime();
+TestQuitReturnsTrue();]]></ST>
+    </Implementation>
+    <Method Name="TestInitResetsTimer" Id="{2efb5f7d-1212-4786-8307-1727c0e77e8d}">
+      <Declaration><![CDATA[METHOD PRIVATE TestInitResetsTimer
+VAR
+	fb : FutureSleep;
+	bResult : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestInitResetsTimer');
+
+fb.sleep_time := T#1S;
+bResult := fb.init();
+
+AssertTrue(Condition := bResult, Message := 'init should return TRUE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestExecuteNotDoneImmediately" Id="{839c4b22-0b3e-4e31-854b-2adee5d18913}">
+      <Declaration><![CDATA[METHOD PRIVATE TestExecuteNotDoneImmediately
+VAR
+	fb : FutureSleep;
+	bResult : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestExecuteNotDoneImmediately');
+
+fb.sleep_time := T#5S;
+fb.init();
+bResult := fb.execute();
+
+AssertFalse(Condition := bResult, Message := 'execute should return FALSE immediately for long sleep');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestExecuteCompletesAfterTime" Id="{8e2457dc-6742-412e-a794-5684c8f98d19}">
+      <Declaration><![CDATA[METHOD PRIVATE TestExecuteCompletesAfterTime
+VAR_INST
+	fb : FutureSleep;
+	nCycle : UINT;
+	bInitDone : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestExecuteCompletesAfterTime');
+
+nCycle := nCycle + 1;
+
+IF NOT bInitDone THEN
+	fb.sleep_time := T#50MS;
+	fb.init();
+	bInitDone := TRUE;
+END_IF
+
+IF fb.execute() THEN
+	AssertTrue(Condition := TRUE, Message := 'Sleep completed successfully');
+	TEST_FINISHED();
+ELSIF nCycle > 500 THEN
+	AssertTrue(Condition := FALSE, Message := 'Sleep did not complete within 500 cycles');
+	TEST_FINISHED();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestQuitReturnsTrue" Id="{aa21a782-2ce0-489c-9027-3ca0d5c943f9}">
+      <Declaration><![CDATA[METHOD PRIVATE TestQuitReturnsTrue
+VAR
+	fb : FutureSleep;
+	bResult : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestQuitReturnsTrue');
+
+fb.sleep_time := T#1S;
+fb.init();
+bResult := fb.quit();
+
+AssertTrue(Condition := bResult, Message := 'quit should return TRUE');
+
+TEST_FINISHED();]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

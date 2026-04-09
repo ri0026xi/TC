@@ -5,6 +5,9 @@
 VAR
 	fbTaskRunner_Test : FB_TaskRunner_Test;
 	fbConveyorControl_Test : FB_ConveyorControl_Test;
+	fbEventMessageQueue_Test : FB_EventMessageQueue_Test;
+	fbFutureSleep_Test : FB_FutureSleep_Test;
+	fbExecutor_Test : FB_Executor_Test;
 END_VAR
 ]]></Declaration>
     <Implementation>
@@ -14,6 +17,9 @@ PRG_Conveyor();
 {IF NOT defined (Release)}
 fbTaskRunner_Test();
 fbConveyorControl_Test();
+fbEventMessageQueue_Test();
+fbFutureSleep_Test();
+fbExecutor_Test();
 TcUnit.RUN();
 {END_IF}
 ]]></ST>
