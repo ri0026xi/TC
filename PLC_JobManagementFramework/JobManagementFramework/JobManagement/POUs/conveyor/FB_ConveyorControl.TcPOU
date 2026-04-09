@@ -334,6 +334,7 @@ CASE _nState OF
 		_mcStop.Execute := FALSE;
 		_mcPower.Enable := FALSE;
 		fBeltSpeed := 0.0;
+		fMotorLoad := 0.0;
 
 		IF _bEStopEffective THEN
 			eStatus := E_ConveyorStatus.EStop;
@@ -348,13 +349,22 @@ CASE _nState OF
 
 		// E-Stop triggered errors require confirmation; other errors just need Reset
 		IF _rtReset.Q AND NOT _bEStopEffective THEN
-			IF (NOT _bEStopTriggered) OR bEStopConfirmed THEN
+			IF _bEStopTriggered AND bEStopConfirmed THEN
+				// E-Stop recovery: axis was just disabled, no MC error to reset
+				_bEStopTriggered := FALSE;
+				_bResetRequested := FALSE;
+				_mcReset.Execute := FALSE;
+				_nState := 0;
+				AddAlarm(eSeverity := E_AlarmSeverity.INFO, sMessage := 'System reset');
+			ELSIF NOT _bEStopTriggered THEN
+				// MC error recovery: need MC_Reset to clear axis error
 				_mcReset.Execute := TRUE;
 				_bResetRequested := TRUE;
 			END_IF
 		END_IF
 
-		IF _mcReset.Done AND _bResetRequested THEN
+		// MC_Reset completion (for MC error recovery path)
+		IF (_mcReset.Done OR _mcReset.Error) AND _bResetRequested THEN
 			_mcReset.Execute := FALSE;
 			_bEStopTriggered := FALSE;
 			_bResetRequested := FALSE;

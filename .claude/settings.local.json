@@ -4,7 +4,13 @@
       "Bash(python scripts/twincat_tdd.py*)",
       "Bash(python:*)",
       "Bash(tasklist)",
-      "PowerShell(Get-ChildItem:*)"
+      "PowerShell(Get-ChildItem:*)",
+      "Read(//c/Users/ktm_a/.claude/plugins/marketplaces/anthropic-agent-skills/skills/web-artifacts-builder/conveyor-hmi/**)",
+      "Bash(pnpm build:*)",
+      "Read(//c/Users/ktm_a/.claude/plugins/marketplaces/anthropic-agent-skills/skills/web-artifacts-builder/**)",
+      "Bash(bash scripts/bundle-artifact.sh conveyor-hmi)",
+      "Bash(bash ../scripts/bundle-artifact.sh)",
+      "Bash(node -e ':*)"
     ]
   },
   "enabledMcpjsonServers": [

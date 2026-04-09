@@ -7,6 +7,7 @@ END_VAR
 ]]></Declaration>
     <Implementation>
       <ST><![CDATA[TestConveyorBuildCheck();
+TestEStopSoftwareRecovery();
 ]]></ST>
     </Implementation>
     <Method Name="TestConveyorBuildCheck" Id="{0b1332b7-22df-426d-bb42-2723a9680ab8}">
@@ -25,6 +26,80 @@ hmi.nTodayCount := 0;
 AssertEquals_UINT(Expected := 0, Actual := hmi.eSystemStatus, Message := 'Status should be Stopped');
 
 TEST_FINISHED();
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="TestEStopSoftwareRecovery" Id="{46013c58-cc29-4e20-a07c-3586604d68a1}">
+      <Declaration><![CDATA[METHOD PRIVATE TestEStopSoftwareRecovery
+VAR_INST
+	fb        : FB_ConveyorControl;
+	axis      : AXIS_REF;
+	nCycle    : UINT;
+	bInitDone : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[TEST('TestEStopSoftwareRecovery');
+
+// Multi-cycle state machine test:
+// Init → E-Stop → Confirm → Reset → expect Stopped
+nCycle := nCycle + 1;
+
+// Phase 0: Init (cycle 1-2)
+IF nCycle <= 2 THEN
+	IF NOT bInitDone THEN
+		fb.init(axis := axis);
+		bInitDone := TRUE;
+	END_IF
+	fb(bEStopCmd := FALSE, bReset := FALSE, bEStopConfirmed := FALSE);
+
+// Phase 1: Trigger software E-Stop (cycle 3-5)
+ELSIF nCycle <= 5 THEN
+	fb(bEStopCmd := TRUE, bReset := FALSE, bEStopConfirmed := FALSE);
+
+// Phase 2: Clear E-Stop cmd, verify error state (cycle 6-10)
+ELSIF nCycle <= 10 THEN
+	fb(bEStopCmd := FALSE, bReset := FALSE, bEStopConfirmed := FALSE);
+	IF nCycle = 10 THEN
+		// Should be in Error state (E-Stop no longer effective, but triggered flag latched)
+		AssertTrue(
+			Condition := fb.eStatus = E_ConveyorStatus.Error OR fb.eStatus = E_ConveyorStatus.EStop,
+			Message := 'Should be in Error or EStop state after software E-Stop');
+	END_IF
+
+// Phase 3: Send Confirm (cycle 11-15)
+ELSIF nCycle <= 15 THEN
+	fb(bEStopCmd := FALSE, bReset := FALSE, bEStopConfirmed := TRUE);
+
+// Phase 4: Send Reset pulse with Confirm still TRUE (cycle 16-20)
+ELSIF nCycle <= 20 THEN
+	IF nCycle = 16 THEN
+		// Rising edge of bReset
+		fb(bEStopCmd := FALSE, bReset := TRUE, bEStopConfirmed := TRUE);
+	ELSE
+		// Keep bReset FALSE after pulse, bEStopConfirmed stays TRUE
+		fb(bEStopCmd := FALSE, bReset := FALSE, bEStopConfirmed := TRUE);
+	END_IF
+
+// Phase 5: Wait for MC_Reset to complete or error (cycle 21-80)
+ELSIF nCycle <= 80 THEN
+	fb(bEStopCmd := FALSE, bReset := FALSE, bEStopConfirmed := TRUE);
+	// Early exit if already recovered
+	IF fb.eStatus = E_ConveyorStatus.Stopped THEN
+		nCycle := 80;
+	END_IF
+
+// Phase 6: Verify recovery
+ELSE
+	AssertEquals_UINT(
+		Expected := E_ConveyorStatus.Stopped,
+		Actual := fb.eStatus,
+		Message := 'System must return to Stopped after E-Stop confirm + reset');
+	AssertFalse(
+		Condition := fb.bEStopActive,
+		Message := 'bEStopActive must be cleared after reset');
+	TEST_FINISHED();
+END_IF
 ]]></ST>
       </Implementation>
     </Method>
